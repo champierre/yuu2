@@ -139,7 +139,8 @@ static func portrait_scale(win: Vector2) -> float:
 	return minf(win.x / 360.0, win.y / 640.0)
 
 ## 640x360 の座標 → 縦長の窓の座標（画素）。
-## 電話の上が左に来る向き（右手側に本体の下）に回す。
+## 本体を右に倒して持つ向き（本体の上が右、下が左に来る）に回す。
+## 絵の上（y=0 の辺）は、縦に持っている間は本体の左の辺に来る。
 static func portrait_screen_transform(win: Vector2) -> Transform2D:
 	var k := portrait_scale(win)
 	var pad := (win - Vector2(360, 640) * k) / 2.0
