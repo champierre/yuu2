@@ -89,12 +89,17 @@ func walk_to(target: Vector2, first_y := false, tol := 4.0, timeout := 12.0) -> 
 			break
 		await _walk_axes(target, axes, tol, t0, timeout)
 	await sleep(0.05)
+	## 目標に触れるとクリアになって、勇者はその場で止まる。それは着いたことにする。
+	if stage.mode == "clear":
+		return true
 	return hero.position.distance_to(target) <= tol * 2.0
 
 func _walk_axes(target: Vector2, axes: Array, tol: float, t0: int, timeout: float) -> void:
 	var hero: Node2D = stage.hero
 	for ax in axes:
 		while (Time.get_ticks_msec() - t0) < timeout * 1000.0:
+			if stage.mode == "clear":
+				break
 			var d: float = target[ax] - hero.position[ax]
 			if absf(d) <= tol:
 				break

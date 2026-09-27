@@ -36,29 +36,42 @@ func _physics_process(delta: float) -> void:
 		return
 	if stage.frozen():
 		return
-	var step := dir * speed * delta
-	position += step
-	_traveled += step.length()
 	if fire and randf() < 0.5:
 		Fx.burst(get_parent(), position - dir * 6.0, Color("#ff8a2a"), 1, "・", 30.0, 9)
-	if hits_walls and stage.shot_blocked(global_position):
-		stage.on_shot_wall(self)
-		die(true)
-		return
+	## 1 コマで進む分を細かく刻む。一気に進めると、的や壁を飛び越えてしまう。
+	var total := speed * delta
+	var steps := maxi(1, ceili(total / 3.0))
+	for i in steps:
+		var step := dir * (total / steps)
+		position += step
+		_traveled += step.length()
+		## 的を先に見る。燭のように「壁と同じマス」にある的もあるので、
+		## 壁を先に見ると、的に届く前に消えてしまう。
+		if _hit_targets():
+			return
+		if hits_walls and stage.shot_blocked(global_position):
+			stage.on_shot_wall(self)
+			die(true)
+			return
+		if _traveled >= reach:
+			stage.on_shot_spent(self)
+			die(true)
+			return
+
+## 何かに当たって消えたら true。
+func _hit_targets() -> bool:
 	if hostile:
 		if stage.hero != null and rect().intersects(stage.hero.rect()):
 			if stage.hurt_hero(damage, global_position):
 				die(false)
-			return
-	else:
-		for t in stage.get_tree().get_nodes_in_group("shootable"):
-			if t is Glyph and t.is_visible_in_tree() and rect().grow(3.0).intersects(t.rect()):
-				if stage.on_shot_hit(self, t):
-					die(false)
-					return
-	if _traveled >= reach:
-		stage.on_shot_spent(self)
-		die(true)
+				return true
+		return false
+	for t in stage.get_tree().get_nodes_in_group("shootable"):
+		if t is Glyph and t.is_visible_in_tree() and rect().grow(3.0).intersects(t.rect()):
+			if stage.on_shot_hit(self, t):
+				die(false)
+				return true
+	return false
 
 ## 消える。drop なら力尽きて落ちる様子を見せる。
 func die(drop: bool) -> void:
