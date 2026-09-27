@@ -76,22 +76,21 @@ class _Circle extends Node2D:
 		draw_circle(Vector2.ZERO, radius, c)
 		draw_arc(Vector2.ZERO, radius, 0, TAU, 32, Color(0.2, 0.2, 0.2, 0.4), 1.5, true)
 
+## _input に届く座標は、すでにゲームの 640x360 の座標に直されている
+## （画面の座標ではない）。ここでもう一度直すと二重になり、
+## 画面が 640x360 より大きいスマホでは、どのボタンも外れる。
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		if event.pressed:
-			_press_at(_to_canvas(event.position), event.index)
+			_press_at(event.position, event.index)
 		else:
 			_release(event.index)
 	elif event is InputEventScreenDrag:
-		var a := _find(_to_canvas(event.position))
+		var a := _find(event.position)
 		if _pressed.get(event.index, "") != a:
 			_release(event.index)
 			if a != "":
-				_press_at(_to_canvas(event.position), event.index)
-
-## 画面の座標を、ゲームの 640x360 の座標へ直す。
-func _to_canvas(p: Vector2) -> Vector2:
-	return get_viewport().get_screen_transform().affine_inverse() * p
+				_press_at(event.position, event.index)
 
 func _find(p: Vector2) -> String:
 	for b in BUTTONS:

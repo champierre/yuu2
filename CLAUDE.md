@@ -84,6 +84,13 @@ if not await wait(0.5): return
 `Stage.give()` は、手がいっぱいならどれを足元に置くかを聞く（`Hud.choose_drop()`）。
 黙って古い方を手放すと、大事な字を落としても気づけない（#4）。
 
+### 11. `_input` に届く指の座標は、もう 640x360 に直っている
+
+`InputEventScreenTouch.position` は Window が画面の座標から直してから渡してくる。
+`get_screen_transform()` でもう一度直すと二重になり、画面が大きいスマホでは
+どのボタンも外れる（実際にそれでスマホで何も押せなかった）。
+ヘッドレスの窓は 64x64 で倍率が 1 でないので、`tests/test_touch.gd` が見張っている。
+
 ## テストの書き方
 
 - `tests/helper.gd` を継承して `_test()` を書く
