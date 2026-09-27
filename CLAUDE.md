@@ -91,6 +91,12 @@ if not await wait(0.5): return
 どのボタンも外れる（実際にそれでスマホで何も押せなかった）。
 ヘッドレスの窓は 64x64 で倍率が 1 でないので、`tests/test_touch.gd` が見張っている。
 
+### 12. 縦持ちの回転は `global_canvas_transform` でやる。Window の 640x360 は変えない
+
+`Game._update_orientation()`。`content_scale_size` を 360x640 に入れ替えると、
+Camera2D と `Dark` が画面の大きさを見ていて壊れる。`global_canvas_transform` なら
+描画も `_input` の座標も Window がまとめて直す。`tests/test_portrait.gd` が見張っている。
+
 ## テストの書き方
 
 - `tests/helper.gd` を継承して `_test()` を書く

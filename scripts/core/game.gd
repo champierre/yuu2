@@ -40,6 +40,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	debug = _detect_debug()
 	_build_fade()
+	_watch_orientation()
 	load_save()
 
 # ---------------------------------------------------------------- 入力
@@ -106,6 +107,50 @@ func _add_axis(action: String, axis: JoyAxis, dir: float) -> void:
 	ev.axis = axis
 	ev.axis_value = dir
 	InputMap.action_add_event(action, ev)
+
+# ---------------------------------------------------------------- 縦持ち
+
+## 縦持ちのスマホでも、横向きのまま遊べるようにする。
+## 窓が縦長のときは、640x360 の絵をまるごと 90 度回して、縦の窓いっぱいに出す。
+##
+## Window の 640x360 は変えない。content_scale_size を入れ替えると、カメラや暗がりが
+## 画面の大きさを見ていて壊れる。global_canvas_transform で回せば、描くものも
+## 指の座標も Window がまとめて直してくれるので、遊びの側は何も知らなくてよい。
+func _watch_orientation() -> void:
+	get_window().size_changed.connect(_update_orientation)
+	_update_orientation()
+
+func _update_orientation() -> void:
+	var win := get_window()
+	var size := Vector2(win.size)
+	if size.y > size.x:
+		## 比を保つ引き伸ばしに任せると、横幅に合わせて小さくなってしまう。
+		## 比を無視させ（縦横別の倍率になる）、その逆を掛けたうえで回す。
+		win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
+		win.global_canvas_transform = portrait_transform(size)
+		win.oversampling_override = portrait_scale(size)
+	else:
+		win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+		win.global_canvas_transform = Transform2D.IDENTITY
+		win.oversampling_override = 0.0
+
+## 縦長の窓 win（画素）に、640x360 の絵を回して収める倍率。
+static func portrait_scale(win: Vector2) -> float:
+	return minf(win.x / 360.0, win.y / 640.0)
+
+## 640x360 の座標 → 縦長の窓の座標（画素）。
+## 電話の上が左に来る向き（右手側に本体の下）に回す。
+static func portrait_screen_transform(win: Vector2) -> Transform2D:
+	var k := portrait_scale(win)
+	var pad := (win - Vector2(360, 640) * k) / 2.0
+	## (x, y) → (y, 640 - x) を k 倍して、余白の分ずらす。
+	return Transform2D(Vector2(0, -k), Vector2(k, 0), Vector2(0, 640 * k) + pad)
+
+## global_canvas_transform に置く値。比を無視した stretch（縦横別の倍率）が
+## この後に掛かるので、その逆を先に掛けておく。合わせると上の変換になる。
+static func portrait_transform(win: Vector2) -> Transform2D:
+	var unstretch := Transform2D(Vector2(640.0 / win.x, 0), Vector2(0, 360.0 / win.y), Vector2.ZERO)
+	return unstretch * portrait_screen_transform(win)
 
 # ---------------------------------------------------------------- debug
 
