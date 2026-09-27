@@ -31,8 +31,15 @@ func _test() -> void:
 		await walk_to(cell(15, 5))
 		await face("right")
 		print("    射る前: pos=%s facing=%s hands=%s mode=%s" % [hero.position, hero.facing, hero.hands, stage.mode])
-		await hold("act", 0.8)
-		await sleep(0.6)
+		Input.action_press("act")
+		await sleep(0.8)
+		print("    溜め=%.2f time_scale=%.2f hp=%d fps=%d" % [stage._charge, Engine.time_scale, hero.hp, Engine.get_frames_per_second()])
+		Input.action_release("act")
+		await sleep(0.05)
+		for n in stage.world.get_children():
+			if n is Shot:
+				print("    矢: pos=%s power=%.2f reach=%.0f fire=%s dead=%s" % [n.position, n.power, n.reach, n.fire, n.is_dead()])
+		await sleep(0.55)
 		if candle.get_meta("lit"):
 			break
 		print("    外れた（%d 回目）" % (i + 1))
