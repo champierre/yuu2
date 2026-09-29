@@ -42,7 +42,8 @@ static func needed() -> bool:
 
 ## 案内に出すボタンの呼び名。
 static func act_name() -> String:
-	return "決" if needed() else "Z"
+	## Z や Enter でも同じことができるが、案内には一番なじみのあるスペースを出す。
+	return "決" if needed() else "スペース"
 
 static func craft_name() -> String:
 	return "合" if needed() else "X"
