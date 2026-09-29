@@ -65,7 +65,8 @@ func bgm_name() -> String:
 	return "cave"
 
 func _build() -> void:
-	enable_dark(0.03)
+	## 明かりの無い所は真っ暗。うっすらでも見えると、燭を灯す意味が薄れる。
+	enable_dark(0.0)
 	build_map(MAP, {
 		"淵": func(c): _abyss(c),
 		"橋": func(c): _bridge(c),

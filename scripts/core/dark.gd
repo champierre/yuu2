@@ -41,13 +41,22 @@ void fragment() {
 	}
 	/* 光の縁は暖かい色に。 */
 	vec3 col = mix(tint, vec3(0.35, 0.16, 0.04), warm * 0.8);
-	COLOR = vec4(col, clamp(1.0 - lit, 0.0, 1.0) * 0.99);
+	/* opacity() と同じ式。明かりの無い所は墨で塗りつぶす（透かさない）。 */
+	COLOR = vec4(col, clamp(1.0 - lit, 0.0, 1.0));
 }
 """
 	_mat = ShaderMaterial.new()
 	_mat.shader = sh
 	_rect.material = _mat
 	add_child(_rect)
+
+## その明るさ（0〜1）の所に、どれだけ濃く墨を重ねるか。1 で何も見えない。
+## シェーダーの COLOR.a と同じ式。
+##
+## 以前は少しだけ透かしていた（0.99 倍）。暗い所でも蝙の動きがうっすら見え、
+## 燭を灯さなくても敵の居場所が分かってしまっていた。
+func opacity(lit: float) -> float:
+	return clampf(1.0 - lit, 0.0, 1.0)
 
 ## 明かりを渡す。each は [画面上の位置, 半径, 強さ]。
 func update_lights(list: Array, time: float) -> void:
