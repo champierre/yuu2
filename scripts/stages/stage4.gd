@@ -161,12 +161,21 @@ func on_shot_hit(shot: Shot, target: Glyph) -> bool:
 		return true
 	return super.on_shot_hit(shot, target)
 
-## 明かり（勇者の手元の火は数えない）。蝙と橋はこれを見る。
+## 蝙が嫌う明かり。置いた明かり（燭・焚き火）と、手持ちの「灯」。
+## 手持ちの火は小さいので数えない。灯は隠しレシピのご褒美として蝙よけになる。
 func lamp_light_at(p: Vector2) -> float:
+	return _light_from_lamps(p, hero.holding("灯"))
+
+## 橋が現れる明かり。置いた明かりだけ。手持ちの明かりは、灯でも数えない。
+## 数えると、燭を射なくても灯を持って近づくだけで橋が出て、謎を飛ばせてしまう。
+func bridge_light_at(p: Vector2) -> float:
+	return _light_from_lamps(p, false)
+
+func _light_from_lamps(p: Vector2, with_hero: bool) -> float:
 	var lit := 0.0
 	for l in _lights:
 		var n: Node2D = l["node"]
-		if n == _hero_light and not hero.holding("灯"):
+		if n == _hero_light and not with_hero:
 			continue
 		if not is_instance_valid(n) or not n.is_inside_tree():
 			continue
@@ -188,7 +197,7 @@ func _stage_process(_delta: float) -> void:
 func _update_bridges() -> void:
 	for c in _bridges:
 		var g: Glyph = _bridges[c]
-		var on := lamp_light_at(cell_center(c)) > BRIDGE_LIT
+		var on := bridge_light_at(cell_center(c)) > BRIDGE_LIT
 		var was := solid_at(c) == FREE
 		if on == was:
 			continue
