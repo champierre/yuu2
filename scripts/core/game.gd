@@ -25,7 +25,8 @@ var cleared := {}
 var discovered := {}
 ## 遊び始めてから倒れた回数（エンディングで出す）。
 var deaths := 0
-## 全部のステージを遊べるようにする（?debug=true / -- debug=true）。
+## デバッグモード。全部のステージを選べ、ステージの中からも数字キーで飛べる。
+## ?debug=true（Web）/ -- debug=true / エディタから起動したとき。
 var debug := false
 
 var _fade: CanvasLayer
@@ -114,7 +115,19 @@ func _detect_debug() -> bool:
 		## 素の location.search を受け取ってこちらで見る。
 		var search := str(JavaScriptBridge.eval("location.search", true))
 		return "debug=true" in search
-	for a in OS.get_cmdline_args() + OS.get_cmdline_user_args():
+	return debug_from(OS.get_cmdline_args() + OS.get_cmdline_user_args(), EngineDebugger.is_active())
+
+## 起動のしかたからデバッグにするかを決める。
+##
+## - `godot --path . -- debug=true` と明示したとき
+## - エディタの ▶ から起動したとき。エディタのデバッガがつながっている（debugger が true）。
+##
+## エディタは --remote-debug を付けて起動するが、エンジンが取り除くので
+## OS.get_cmdline_args() には残らない。引数を見ても分からない。
+func debug_from(args: Array, debugger: bool) -> bool:
+	if debugger:
+		return true
+	for a in args:
 		if a == "debug=true" or a == "--debug=true":
 			return true
 	return false

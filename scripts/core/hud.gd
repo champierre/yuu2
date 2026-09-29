@@ -131,6 +131,23 @@ class _Bar extends Node2D:
 		draw_rect(Rect2(0, 0, 200 * ratio, 6), Color("#7a1f3d"))
 		draw_rect(Rect2(0, 0, 200, 6), Color(0, 0, 0, 0.6), false, 1.0)
 
+var _debug_badge: Glyph = null
+
+## デバッグモードの印。遊んでいる人に紛らわしくないよう、隅に小さく出す。
+func show_debug_badge(t: String) -> void:
+	if _debug_badge == null:
+		_debug_badge = Glyph.make("", RED, 10)
+		_debug_badge.bold = false
+		_debug_badge.shadow = false
+		_debug_badge.outline = 3
+		_debug_badge.outline_color = PAPER
+		add_child(_debug_badge)
+	_debug_badge.text = t
+	_debug_badge.position = Vector2(12 + _debug_badge.box().x * 0.5, 40)
+
+func has_debug_badge() -> bool:
+	return _debug_badge != null and _debug_badge.text != ""
+
 func set_title(t: String) -> void:
 	_title.text = t
 

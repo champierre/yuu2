@@ -60,9 +60,15 @@ func _test() -> void:
 	await finish_talk()
 	await until(func(): return stage.goal() != null and stage.mode == "play", 8.0)
 	check(stage.goal() != null and stage.goal().text == "光", "光が現れた")
-	## 戦いのあとの勇者は、魔に押し戻されてどこにいるか分からない。光のすぐ下から歩く。
-	hero.position = stage.goal().position + Vector2(0, 30)
-	check(not stage.blocked(hero.rect()), "光の下は空いている")
+	## 戦いのあとの勇者は、魔に押し戻されてどこにいるか分からない。光のすぐそばから歩く。
+	## 光が柱の近くに出ることもあるので、空いている側を選ぶ。
+	var free := false
+	for off in [Vector2(0, 30), Vector2(0, -30), Vector2(30, 0), Vector2(-30, 0)]:
+		hero.position = stage.goal().position + off
+		if not stage.blocked(hero.rect()):
+			free = true
+			break
+	check(free, "光のそばに空いている所がある")
 	check(await walk_to(stage.goal().position, false, 4.0, 15.0), "光まで歩ける")
 	await sleep(0.2)
 	check(stage.mode == "clear", "クリアした")

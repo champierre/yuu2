@@ -10,7 +10,7 @@ func _shoot_at(target: Node2D) -> void:
 	## 相手が岩の上を這っていることもあるので、地形では止めない。
 	s.hits_walls = false
 	s.speed = 600.0
-	s.reach = 60.0
+	s.reach = 16.0
 	s.position = target.position + Vector2(0, 14)
 	stage.world.add_child(s)
 	await sleep(0.1)
@@ -41,9 +41,12 @@ func _test() -> void:
 
 	## 出てきた直後は節が穴に重なっているので、蟲が伸びきるまで待つ。
 	await sleep(2.5)
+	## 尾にかすった矢は尾に当たった扱いになるので、尾が離れているときに撃つ。
 	var n0: int = stage._segs.size()
+	await until(func(): return stage._segs[-1].position.distance_to(stage._head.position) > 60.0, 5.0)
 	await _shoot_at(stage._head)
 	check(stage._segs.size() == n0, "頭に当てても効かない")
+	await until(func(): return stage._segs[-1].position.distance_to(stage._segs[0].position) > 60.0, 5.0)
 	await _shoot_at(stage._segs[0])
 	check(stage._segs.size() == n0, "節に当てても効かない")
 	await _shoot_at(stage._segs[-1])

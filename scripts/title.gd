@@ -24,6 +24,7 @@ var _panel: Node2D
 var _big: Glyph
 var _t := 0.0
 var _busy := false
+var _debug_badge: Glyph = null
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Color("#f3ecdc"))
@@ -53,9 +54,19 @@ func _ready() -> void:
 	add_child(_panel)
 	if TouchPad.needed():
 		add_child(TouchPad.new())
+	if Game.debug:
+		_debug_badge = Glyph.make("デバッグ　全ステージを選べます", RED, 11)
+		_debug_badge.shadow = false
+		_debug_badge.outline = 3
+		_debug_badge.outline_color = PAPER
+		_debug_badge.position = Vector2(470, 30)
+		add_child(_debug_badge)
 	_show_menu()
 	Sfx.bgm("title")
 	Sfx.prepare("field")
+
+func has_debug_badge() -> bool:
+	return _debug_badge != null
 
 func _build_drift() -> void:
 	for i in 26:

@@ -13,7 +13,7 @@ func _run() -> void:
 	var scene := args[0]
 	var secs := float(args[1])
 	var out := args[2]
-	var keys := args.slice(3)
+	var keys := Array(args.slice(3)).filter(func(k): return ":" in k)
 	change_scene_to_file(scene)
 	var t0 := Time.get_ticks_msec()
 	for k in keys:

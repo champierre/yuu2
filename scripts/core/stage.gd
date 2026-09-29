@@ -145,6 +145,8 @@ func _ready() -> void:
 	var info := Game.stage_info(number())
 	hud.set_title("%s「%s」" % [info.get("name", ""), info.get("kanji", "")])
 	_refresh_hud()
+	if Game.debug:
+		hud.show_debug_badge("デバッグ　1〜%d: ステージへ　N: クリア扱い" % Game.STAGES.size())
 	Sfx.bgm(bgm_name())
 	_intro()
 
@@ -204,6 +206,28 @@ func _intro() -> void:
 		return
 	if mode == "cut":
 		mode = "play"
+
+# ---------------------------------------------------------------- デバッグ
+
+## デバッグモードのときだけ効くキー。
+##   1〜6: そのステージへ飛ぶ　N: いまのステージをクリア扱いにする
+func _unhandled_input(event: InputEvent) -> void:
+	if not Game.debug or not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	var code: int = event.keycode if event.keycode != 0 else event.physical_keycode
+	if code >= KEY_1 and code <= KEY_9:
+		var no := code - KEY_0
+		if Game.stage_info(no).is_empty() or _leaving:
+			return
+		get_viewport().set_input_as_handled()
+		_leaving = true
+		get_tree().paused = false
+		Game.goto_stage(no)
+	elif code == KEY_N and mode == "play":
+		get_viewport().set_input_as_handled()
+		if _goal == null or not is_instance_valid(_goal):
+			add_goal(hero.position)
+		clear()
 
 # ---------------------------------------------------------------- 地図
 
