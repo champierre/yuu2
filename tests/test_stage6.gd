@@ -34,11 +34,15 @@ func _test() -> void:
 	await craft()
 	check(hero.holding("明"), "日＋月＝明")
 
+	## 明を持っていても、魔から離れていれば闇ははがれない。
+	## 魔は漂っているので、どこにいても届かない左下の隅まで離れてから撃つ。
+	check(await walk_path([cell(22, 11), cell(1, 11), cell(1, 13)]), "魔から離れた隅へ")
+	await until(func(): return stage._shield_up, 3.0)
 	var hp0: int = stage._hp
 	await _shoot_at(stage._boss)
 	check(stage._hp == hp0, "闇をまとっている間は、矢が届かない")
 
-	check(await walk_path([cell(22, 11), cell(14, 11), cell(14, 12)]), "宝箱の前へ")
+	check(await walk_path([cell(1, 11), cell(14, 11), cell(14, 12)]), "宝箱の前へ")
 	await face("left")
 	await tap("act")
 	check(hero.holding("弓") and hero.holding("明"), "明と弓を両手に持った")
