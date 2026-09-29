@@ -217,18 +217,30 @@ func _build_dialog() -> void:
 	_dialog_name.outline_color = PAPER
 	_dialog_name.position = Vector2(80, 262)
 	_dialog.add_child(_dialog_name)
-	_dialog_label = Label.new()
-	_dialog_label.position = Vector2(60, 276)
-	_dialog_label.size = Vector2(520, 60)
-	_dialog_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-	_dialog_label.add_theme_color_override("font_color", INK)
-	_dialog_label.add_theme_font_size_override("font_size", 15)
+	_dialog_label = wrapped_label("", Vector2(60, 276), 520.0, 15)
 	_dialog_label.add_theme_constant_override("line_spacing", 2)
 	_dialog.add_child(_dialog_label)
 	_dialog_arrow = Glyph.make("▼", RED, 10)
 	_dialog_arrow.shadow = false
 	_dialog_arrow.position = Vector2(584, 334)
 	_dialog.add_child(_dialog_arrow)
+
+## 決まった幅で折り返す文。
+##
+## 折り返しを先に有効にしてから、文と幅を入れること。
+## 幅を先に決めると、Label はその時点の文の長さまで横に伸び、
+## あとで折り返しを有効にしても縮まない（札の説明が枠からはみ出していた）。
+static func wrapped_label(text: String, pos: Vector2, width: float, font_size: int) -> Label:
+	var l := Label.new()
+	## 語の切れ目で折り返す（日本語では、句読点が行頭に来ないようにしてくれる）。
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_color_override("font_color", INK)
+	l.add_theme_font_size_override("font_size", font_size)
+	l.custom_minimum_size = Vector2(width, 0)
+	l.text = text
+	l.position = pos
+	l.size = Vector2(width, 0)
+	return l
 
 class _Panel extends Node2D:
 	var rect := Rect2()
@@ -299,36 +311,31 @@ func card(result: String, is_new: bool) -> void:
 	for c in _card.get_children():
 		c.queue_free()
 	var bg := _Panel.new()
-	bg.rect = Rect2(-150, -110, 300, 210)
+	bg.rect = Rect2(-155, -118, 310, 240)
 	_card.add_child(bg)
-	var big := Glyph.make(result, INK, 76)
-	big.position = Vector2(0, -30)
+	var big := Glyph.make(result, INK, 72)
+	big.position = Vector2(0, -38)
 	big.outline = 6
 	big.outline_color = PAPER
 	_card.add_child(big)
 	var info: Dictionary = Kanji.INFO.get(result, {})
 	var f := Glyph.make(Kanji.formula(result) + " ＝ " + result, SUB, 15)
 	f.shadow = false
-	f.position = Vector2(0, 32)
+	f.position = Vector2(0, 22)
 	_card.add_child(f)
 	var yomi := Glyph.make("「%s」" % info.get("yomi", ""), RED, 13)
 	yomi.shadow = false
-	yomi.position = Vector2(0, 54)
+	yomi.position = Vector2(0, 44)
 	_card.add_child(yomi)
-	var d := Label.new()
-	d.text = info.get("desc", "")
-	d.position = Vector2(-135, 64)
-	d.size = Vector2(270, 36)
+	## 説明は 2 行まで入るようにしてある（札の下の端は 122）。
+	var d := wrapped_label(info.get("desc", ""), Vector2(-140, 58), 280.0, 12)
 	d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	d.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-	d.add_theme_color_override("font_color", INK)
-	d.add_theme_font_size_override("font_size", 12)
 	_card.add_child(d)
 	if is_new:
 		var n := Glyph.make("新発見！ 字典に載った", RED, 12)
 		n.outline = 4
 		n.outline_color = PAPER
-		n.position = Vector2(0, -98)
+		n.position = Vector2(0, -104)
 		_card.add_child(n)
 	_card.visible = true
 	_card.scale = Vector2(0.3, 0.3)
