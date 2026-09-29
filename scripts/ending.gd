@@ -40,7 +40,7 @@ func _ready() -> void:
 		["― 字 ―", RED, 16],
 		["Noto Sans JP（SIL Open Font License）", SUB, 13],
 		["", INK, 50],
-		["おしまい", INK, 34],
+		["終", INK, 34],
 	]
 	var y := 400.0
 	for l in lines:

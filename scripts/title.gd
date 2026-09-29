@@ -1,12 +1,12 @@
 extends Node2D
-## タイトル。はじめから・ステージを選ぶ・字典・遊び方。
+## タイトル。始（はじめから）・ステージを選ぶ・字典・遊び方。
 
 const INK := Color("#1f1a16")
 const RED := Color("#b8322a")
 const SUB := Color("#6b6259")
 const PAPER := Color("#f6f0e2")
 
-const MENU := ["はじめから", "ステージを選ぶ", "字典", "遊び方"]
+const MENU := ["始", "ステージを選ぶ", "字典", "遊び方"]
 const DRIFT := "木川山火日月金土水人口田石竹花鳥門光"
 
 const PROLOGUE := [
