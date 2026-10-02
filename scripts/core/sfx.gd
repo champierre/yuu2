@@ -121,6 +121,7 @@ func _make_sounds() -> void:
 		_tone(0.1, 880, 880, "sq", 0.13), _tone(0.1, 1047, 1047, "sq", 0.13), _tone(0.5, 1175, 1175, "sq", 0.13, 1.0)]))
 	_sounds["stamp"] = _wav(_mix(_noise(0.12, 0.5, 3.0), _tone(0.2, 120, 50, "sin", 0.8)))
 	_sounds["bell"] = _wav(_mix(_tone(1.2, 880, 880, "sin", 0.25, 1.5), _tone(1.2, 2210, 2210, "sin", 0.1, 3.0)))
+	_sounds["flap"] = _wav(_cat([_noise(0.05, 0.18, 2.5), _silence(0.03), _noise(0.05, 0.14, 2.5)]))
 	_sounds["fire"] = _wav(_mix(_noise(0.25, 0.3, 1.5), _tone(0.25, 200, 500, "saw", 0.1)))
 
 ## 1 つの音。f0 から f1 へ滑らせる。env は減衰の強さ（大きいほど早く消える）。

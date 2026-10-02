@@ -48,6 +48,9 @@ const HERO_FIRE_R := 78.0
 const HERO_LANTERN_R := 135.0
 ## これより明るい所に、蝙は入ってこない。
 const BAT_FEAR := 0.35
+## 蝙の羽音が聞こえる距離と、鳴らす間隔（秒）。
+const FLAP_HEAR := 120.0
+const FLAP_SOUND_EVERY := 0.6
 ## 橋はこれより明るいと現れる。
 const BRIDGE_LIT := 0.4
 
@@ -221,6 +224,36 @@ func _update_bridges() -> void:
 ## 暗がりを漂い、勇者に寄ってくる。明かりには入らない。
 class Bat extends Enemy:
 	var _flap := randf() * TAU
+	## 暗がりでも見える、光る目。姿は闇に隠れるが、気配は分かるようにする（#2）。
+	## 闇より手前の層に置くので、蝙とは別のノードにして毎コマ位置を合わせる。
+	var eyes: Glyph = null
+	var _flap_sound := randf() * FLAP_SOUND_EVERY
+
+	func _ready() -> void:
+		super._ready()
+		eyes = Glyph.make("・・", Color(0.95, 0.25, 0.2, 0.85), 10)
+		eyes.shadow = false
+		stage.glow_layer().add_child(eyes)
+		_follow_eyes()
+
+	func _process(delta: float) -> void:
+		_follow_eyes()
+		## ときどき瞬く。
+		eyes.visible = fmod(_flap * 0.13, 4.0) > 0.25
+		## 近くにいると羽音がする。
+		_flap_sound -= delta
+		var s: Node = stage
+		if _flap_sound <= 0.0 and not s.frozen() and position.distance_to(s.hero.position) < FLAP_HEAR:
+			_flap_sound = FLAP_SOUND_EVERY
+			Sfx.play("flap", randf_range(0.9, 1.15), -6.0)
+
+	func _follow_eyes() -> void:
+		if eyes != null and is_instance_valid(eyes):
+			eyes.global_position = global_position + Vector2(0, -2)
+
+	func _exit_tree() -> void:
+		if eyes != null and is_instance_valid(eyes):
+			eyes.queue_free()
 
 	func think(delta: float) -> void:
 		_flap += delta * 12.0
