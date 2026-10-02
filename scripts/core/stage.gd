@@ -116,6 +116,14 @@ func on_crafted(_k: String) -> void:
 func on_pick(_k: String) -> void:
 	pass
 
+## 目標に触れたとき、いまクリアしてよいか。条件のあるステージが書き換える。
+func can_clear() -> bool:
+	return true
+
+## 目標に触れたが、まだクリアできないとき（毎コマ呼ばれる）。
+func on_goal_blocked() -> void:
+	pass
+
 # ---------------------------------------------------------------- 組み立て
 
 func _ready() -> void:
@@ -572,7 +580,10 @@ func _process(delta: float) -> void:
 	if mode == "play":
 		_stage_process(delta)
 	if mode == "play" and _goal != null and is_instance_valid(_goal) and _goal.visible and hero.touching(_goal):
-		clear()
+		if can_clear():
+			clear()
+		else:
+			on_goal_blocked()
 
 func _nearest_interact() -> Dictionary:
 	var best := {}
@@ -1090,8 +1101,12 @@ func glow_layer() -> Node2D:
 	return _glow
 
 ## node の場所に明かりを置く（node が動けば明かりもついてくる）。
+##
+## 持ち主が場面から外れたら、その場で一覧からも外す。
+## 火矢のように先に消える持ち主もあり、消えたものを型付きの変数に入れると落ちるため。
 func add_light(node: Node2D, radius: float, strength := 1.0) -> void:
 	_lights.append({"node": node, "r": radius, "s": strength})
+	node.tree_exiting.connect(remove_light.bind(node), CONNECT_ONE_SHOT)
 
 func remove_light(node: Node2D) -> void:
 	for i in range(_lights.size() - 1, -1, -1):
@@ -1122,8 +1137,9 @@ func _update_lights() -> void:
 	var ct := get_viewport().get_canvas_transform()
 	var list := []
 	for i in range(_lights.size() - 1, -1, -1):
-		var n: Node2D = _lights[i]["node"]
-		if not is_instance_valid(n) or not n.is_inside_tree():
+		## 型を付けずに受ける（消えたものを Node2D の変数に入れると落ちる）。
+		var obj = _lights[i]["node"]
+		if not is_instance_valid(obj) or not obj.is_inside_tree():
 			_lights.remove_at(i)
 	for l in _lights:
 		var n: Node2D = l["node"]
