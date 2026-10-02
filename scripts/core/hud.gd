@@ -6,6 +6,7 @@ extends CanvasLayer
 
 signal dialog_done
 signal card_done
+signal drop_chosen(k: String)
 signal pause_choice(choice: String)
 
 const INK := Color("#1f1a16")
@@ -201,6 +202,7 @@ func _process(delta: float) -> void:
 		b.glow = glow
 	_process_dialog(delta)
 	_process_card(delta)
+	_process_choose()
 	_process_pause()
 
 # ---------------------------------------------------------------- 会話
@@ -361,6 +363,91 @@ func _process_card(delta: float) -> void:
 		tw.tween_property(_card, "modulate:a", 0.0, 0.15)
 		tw.tween_callback(func(): _card.visible = false)
 		card_done.emit()
+
+# ---------------------------------------------------------------- どれを置く？
+
+var _choose: Node2D
+var _choose_opts: Array[String] = []
+var _choose_cells: Array[Glyph] = []
+var _choose_i := 0
+var _choosing := false
+var _choose_armed := false
+
+## 両手がふさがっているときに字を受け取ると、どれを足元に置くかを聞く。
+## 選べるのは 左の字・右の字・新しい字（＝拾わない）。何を選んでも字は消えない。
+## 初めは「新しい字」を指しておく。決定を連打しても、大事な字を落とさないように。
+func choose_drop(left: String, right: String, new_k: String) -> void:
+	if _choose != null:
+		_choose.queue_free()
+	_choose = Node2D.new()
+	_choose.position = Vector2(320, 190)
+	add_child(_choose)
+	var bg := _Panel.new()
+	bg.rect = Rect2(-150, -62, 300, 124)
+	_choose.add_child(bg)
+	var t := Glyph.make("手がいっぱい。どれを置く？", INK, 14)
+	t.shadow = false
+	t.position = Vector2(0, -40)
+	_choose.add_child(t)
+	_choose_opts = [left, right, new_k]
+	_choose_cells.clear()
+	var xs := [-90.0, -30.0, 70.0]
+	for i in 3:
+		var g := Glyph.make(_choose_opts[i], INK, 28)
+		g.outline = 4
+		g.outline_color = PAPER
+		g.position = Vector2(xs[i], 2)
+		_choose.add_child(g)
+		_choose_cells.append(g)
+	var hands := Glyph.make("手に持っている字", SUB, 10)
+	hands.shadow = false
+	hands.position = Vector2(-60, 30)
+	_choose.add_child(hands)
+	var nk := Glyph.make("新しい字（拾わない）", SUB, 10)
+	nk.shadow = false
+	nk.position = Vector2(70, 30)
+	_choose.add_child(nk)
+	var hint := Glyph.make("←→ 選ぶ　%s 足元に置く" % TouchPad.act_name(), RED, 11)
+	hint.shadow = false
+	hint.position = Vector2(0, 50)
+	_choose.add_child(hint)
+	_choose_i = 2
+	_choosing = true
+	_choose_armed = false
+	_refresh_choose()
+
+func is_choosing() -> bool:
+	return _choosing
+
+func _refresh_choose() -> void:
+	for i in _choose_cells.size():
+		var g := _choose_cells[i]
+		var on := i == _choose_i
+		g.color = RED if on else INK
+		g.outline_color = Color("#f0c8b0") if on else PAPER
+		g.outline = 8 if on else 4
+		g.squash = Vector2(1.15, 1.15) if on else Vector2.ONE
+
+func _process_choose() -> void:
+	if not _choosing:
+		return
+	## 字を受け取ったときの押し下げで、すぐ決まらないよう、一度離すまで待つ。
+	if not Input.is_action_pressed("act") and not Input.is_action_pressed("ui_accept"):
+		_choose_armed = true
+	if Input.is_action_just_pressed("left") or Input.is_action_just_pressed("ui_left"):
+		_choose_i = (_choose_i + 2) % 3
+		Sfx.play("select")
+		_refresh_choose()
+	elif Input.is_action_just_pressed("right") or Input.is_action_just_pressed("ui_right"):
+		_choose_i = (_choose_i + 1) % 3
+		Sfx.play("select")
+		_refresh_choose()
+	elif _choose_armed and (Input.is_action_just_pressed("act") or Input.is_action_just_pressed("ui_accept")):
+		_choosing = false
+		Sfx.play("drop")
+		_choose.queue_free()
+		_choose = null
+		drop_chosen.emit(_choose_opts[_choose_i])
 
 # ---------------------------------------------------------------- 一時停止
 
