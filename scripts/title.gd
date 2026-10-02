@@ -88,7 +88,13 @@ func _process(delta: float) -> void:
 		if gg.position.y < -30:
 			gg.position = Vector2(randf() * 640, 390)
 	_big.tilt = sin(_t * 0.8) * 0.02
-	if _busy or Game.is_changing():
+	if Game.is_changing():
+		return
+	## 物語のはじまりは、流れている途中でも戻れる・飛ばせる（#64）。
+	if _screen == "prologue":
+		_input_prologue()
+		return
+	if _busy:
 		return
 	match _screen:
 		"menu":
@@ -97,13 +103,10 @@ func _process(delta: float) -> void:
 			_input_list(Game.STAGES.size(), _choose_stage)
 		"dex":
 			_input_dex()
-		"help", "prologue":
+		"help":
 			if _accept() or _back():
-				if _screen == "prologue":
-					_start_game()
-				else:
-					Sfx.play("select")
-					_show_menu()
+				Sfx.play("select")
+				_show_menu()
 
 func _accept() -> bool:
 	return Input.is_action_just_pressed("act") or Input.is_action_just_pressed("ui_accept")
@@ -181,24 +184,55 @@ func _choose_menu(i: int) -> void:
 
 # ---------------------------------------------------------------- 物語のはじまり
 
+## 物語のはじまりを何回目に出したか。戻ってから流れ終わった古い演出が、
+## メニューに「はじめる」の案内を足してしまわないよう見分ける。
+var _prologue_gen := 0
+var _prologue_lines: Array[Glyph] = []
+var _prologue_ready := false
+
 func _show_prologue() -> void:
 	_screen = "prologue"
 	_clear_panel()
-	_busy = true
+	_prologue_gen += 1
+	var gen := _prologue_gen
+	_prologue_ready = false
+	_prologue_lines.clear()
 	for i in PROLOGUE.size():
 		var g := _label(PROLOGUE[i], Vector2(470, 110 + i * 34), INK, 13)
 		g.modulate.a = 0.0
 		var tw := g.create_tween()
 		tw.tween_interval(i * 0.6)
 		tw.tween_property(g, "modulate:a", 1.0, 0.5)
+		_prologue_lines.append(g)
 	await get_tree().create_timer(0.6 * PROLOGUE.size()).timeout
-	if not is_inside_tree():
+	if not is_inside_tree() or gen != _prologue_gen or _screen != "prologue":
 		return
+	_show_prologue_hint()
+
+func _show_prologue_hint() -> void:
+	if _prologue_ready:
+		return
+	_prologue_ready = true
 	var go := _label("%s はじめる" % TouchPad.act_name(), Vector2(470, 280), RED, 14, true)
 	var tw2 := go.create_tween().set_loops()
 	tw2.tween_property(go, "modulate:a", 0.3, 0.5)
 	tw2.tween_property(go, "modulate:a", 1.0, 0.5)
-	_busy = false
+	_label("%s 戻る" % TouchPad.pause_name(), Vector2(470, 336), SUB, 11)
+
+## 戻るでメニューへ。決定は、流れている途中なら全部を出し、出しきっていれば始める。
+func _input_prologue() -> void:
+	if _back():
+		Sfx.play("select")
+		_prologue_gen += 1
+		_show_menu()
+	elif _accept():
+		if _prologue_ready:
+			_start_game()
+		else:
+			for g in _prologue_lines:
+				if is_instance_valid(g):
+					g.modulate.a = 1.0
+			_show_prologue_hint()
 
 func _start_game() -> void:
 	Sfx.play("confirm")
