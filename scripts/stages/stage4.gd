@@ -28,7 +28,7 @@ const MAP := [
 	"山岩岩岩岩・・岩岩岩・岩岩岩・・・淵淵淵淵淵淵淵淵淵淵淵淵橋橋淵淵淵淵山",
 	"山・・・岩・・岩・・・・・岩・・・淵淵淵淵淵淵淵淵淵淵淵淵橋橋淵淵淵淵山",
 	"山・・・岩・・岩・・燭・・岩・・・淵淵・・・・・・・・・・燭・・・・・山",
-	"山・焚・・・・岩・・・・・岩・・・淵淵・岩岩岩岩岩岩岩・・・・・・・・山",
+	"山・焚・・・・岩・・・・・岩・・・淵淵・岩岩岩・岩岩岩・・・・・・・・山",
 	"山・・・・・・岩・・・・・岩・・・淵淵・岩・・・・・岩・・・蝙・・・・山",
 	"山・勇・・箱・岩・・命・・岩・・・淵淵・岩・・蝙・・岩・・・・標・・・山",
 	"山・・・・・・岩・・・・・岩・・・淵淵・岩・・・・・岩・・・・・・・・山",
@@ -279,6 +279,7 @@ func _stage_process(_delta: float) -> void:
 
 ## 照らされた淵にだけ、橋が現れる。
 func _update_bridges() -> void:
+	var raised: Array[Vector2i] = []
 	for c in _bridges:
 		var g: Glyph = _bridges[c]
 		var on := bridge_light_at(cell_center(c)) > BRIDGE_LIT
@@ -286,12 +287,9 @@ func _update_bridges() -> void:
 		if on == was:
 			continue
 		if on:
+			## 渡れるようになるのは、照らされた瞬間。見た目は _raise_bridge が順に出す。
 			set_solid(c, FREE)
-			g.text = "橋"
-			g.color = COL_BRIDGE
-			Fx.pop(g, 0.5)
-			Fx.burst(world, g.position, COL_BRIDGE, 5, "・", 60.0, 9)
-			Sfx.play("pop", 0.7)
+			raised.append(c)
 		else:
 			## 勇者が上にいるときは消さない（落ちてしまうので）。
 			if Rect2(Vector2(c) * CELL, Vector2(CELL, CELL)).intersects(hero.rect()):
@@ -299,6 +297,40 @@ func _update_bridges() -> void:
 			set_solid(c, WATER)
 			g.text = "淵"
 			g.color = COL_ABYSS
+	if not raised.is_empty():
+		_raise_bridge(raised)
+
+## 光の橋が架かる。この面の答えなので、燭が灯るときより大きく見せる（#51）。
+## 勇者のいる岸（燭から遠い、暗い側）から 1 マスずつ架け、音を 1 段ずつ上げる。
+## 架かりきったら、画面を少し揺らし、光の輪と一言で知らせる。
+const BRIDGE_STEP := 0.14
+
+func _raise_bridge(cells: Array[Vector2i]) -> void:
+	cells.sort_custom(func(a, b): return bridge_light_at(cell_center(a)) < bridge_light_at(cell_center(b)))
+	var center := Vector2.ZERO
+	for c in cells:
+		center += cell_center(c)
+	center /= cells.size()
+	for i in cells.size():
+		if i > 0 and not await wait(BRIDGE_STEP):
+			return
+		var g: Glyph = _bridges[cells[i]]
+		g.text = "橋"
+		g.color = COL_BRIDGE
+		Fx.pop(g, 0.7)
+		Fx.flash(g, 0.25)
+		Fx.burst(world, g.position, COL_LAMP, 6, "・", 70.0, 9)
+		Sfx.play("pop", 0.8 + i * 0.18)
+	if not await wait(BRIDGE_STEP):
+		return
+	shake(5.0)
+	Sfx.play("light", 1.2)
+	Fx.ring(world, center, COL_BRIDGE, 200.0, 0.6, 4.0)
+	## 橋の燭が最後の 1 本だったときは、「すべての灯」の知らせを上書きしないよう、いっしょに出す。
+	if _lit_count() >= _candles.size():
+		hud.toast("光の橋が架かった！　すべての灯がともった。目標へ", COL_LAMP, 2.6)
+	else:
+		hud.toast("光の橋が架かった！", COL_LAMP, 2.0)
 
 # ---------------------------------------------------------------- 蝙
 
