@@ -27,9 +27,8 @@ func _test() -> void:
 	check(hero.holding("失") and not hero.holding("金"), "手に失が残る")
 
 	## 奪われた場所は町のどこか（盗人の方から寄ってこないので）。
-	## 横にまっすぐ戻ると家に突き当たるので、家の無い 9 段目を通って戻る。
-	var col: int = stage.cell_of(hero.position).x
-	check(await walk_path([cell(col, 9)], true) and await walk_path([cell(20, 9), cell(20, 12), cell(21, 12)]), "もう一度宝箱の前へ")
+	## 決め打ちの道筋だと家や炉に突き当たることがあるので、地図をたどって戻る。
+	check(await walk_route(Vector2i(21, 12)), "もう一度宝箱の前へ")
 	await face("up")
 	await tap("act")
 	check(hero.holding("金") and hero.holding("失"), "金と失を持った")
@@ -37,11 +36,16 @@ func _test() -> void:
 	await craft()
 	check(hero.holding("鉄"), "金＋失＝鉄")
 
-	check(await walk_to(cell(11, 7)), "門番の前へ")
-	await face("up")
-	await tap("act")
-	await finish_talk()
-	await until(func(): return stage.mode == "play", 3.0)
+	check(await walk_route(Vector2i(11, 7)), "門番の前へ")
+	## うろつく村人がたまたま門番より近いと、村人に話しかけてしまう。門が開くまで話し直す。
+	for i in 3:
+		await walk_to(cell(11, 7), false, 3.0, 2.0)
+		await face("up")
+		await tap("act")
+		await finish_talk()
+		await until(func(): return stage.mode == "play", 3.0)
+		if stage._gate_open:
+			break
 	check(stage._gate_open and stage.solid_at(Vector2i(12, 5)) == 0, "鉄を見せると門が開く")
 
 	check(await walk_to(stage.goal().position), "門を抜けて目標まで歩ける")

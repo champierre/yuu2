@@ -113,6 +113,44 @@ func _walk_axes(target: Vector2, axes: Array, tol: float, t0: int, timeout: floa
 			Input.action_release(a)
 		release_all()
 
+## 地図をたどって通れる道を探し、そのマス目に沿って target のマスまで歩く。
+## 決め打ちの道筋だと、出発する場所によっては壁や家に突き当たるので、こちらを使う。
+func walk_route(target: Vector2i) -> bool:
+	var start: Vector2i = stage.cell_of(stage.hero.position)
+	var prev := {start: start}
+	var q := [start]
+	while not q.is_empty():
+		var c: Vector2i = q.pop_front()
+		if c == target:
+			break
+		for d in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var n: Vector2i = c + d
+			if prev.has(n) or stage.solid_at(n) != stage.FREE:
+				continue
+			prev[n] = c
+			q.append(n)
+	if not prev.has(target):
+		print("    道が見つからない ", start, " -> ", target)
+		return false
+	var path := []
+	var c: Vector2i = target
+	while c != start:
+		path.push_front(c)
+		c = prev[c]
+	## 向きが変わる所だけを経由地にする。
+	var points := []
+	for i in path.size():
+		var last := i == path.size() - 1
+		if last or (path[i + 1] - path[i]) != (path[i] - (path[i - 1] if i > 0 else start)):
+			points.append(stage.cell_center(path[i]))
+	## まず今いるマスの真ん中へ寄せる（マスの端にいると角に引っかかる）。
+	await walk_to(stage.cell_center(start), false, 3.0, 2.0)
+	for p in points:
+		if not await walk_to(p, false, 3.0, 6.0):
+			print("    walk stuck near ", stage.hero.position, " -> ", p)
+			return false
+	return true
+
 ## 経由地を順にたどる。
 func walk_path(points: Array, first_y := false) -> bool:
 	for p in points:
