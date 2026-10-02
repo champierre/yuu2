@@ -21,6 +21,7 @@ var _title: Glyph
 var _hand_boxes: Array[Node2D] = []
 var _hand_glyphs: Array[Glyph] = []
 var _craft_hint: Glyph
+var _craft_known := false
 var _prompt: Glyph
 var _toast: Glyph
 var _toast_tw: Tween
@@ -168,11 +169,17 @@ func set_hands(hands: Array, combinable: String, known: bool) -> void:
 		if g.text != t and t != "":
 			Fx.pop(g, 0.5)
 		g.text = t
-	if combinable != "":
-		_craft_hint.text = "%s 合わせる → %s" % [TouchPad.craft_name(), combinable if known else "？"]
-		_craft_hint.position.x = 640 - 10 - _craft_hint.box().x * 0.5
+	## 合わせられるかどうかは教えない。教えると、字を合わせる謎の答えになる（#1）。
+	## 両手に字があれば、どんな組でも同じ「合わせてみる」を出す。
+	## 一度作ったことのある字だけは、何ができるかを出して光らせる。
+	_craft_known = combinable != "" and known
+	if _craft_known:
+		_craft_hint.text = "%s 合わせる → %s" % [TouchPad.craft_name(), combinable]
+	elif hands.size() >= 2:
+		_craft_hint.text = "%s 合わせてみる" % TouchPad.craft_name()
 	else:
 		_craft_hint.text = ""
+	_craft_hint.position.x = 640 - 10 - _craft_hint.box().x * 0.5
 
 func set_prompt(t: String) -> void:
 	_prompt.text = t
@@ -195,7 +202,8 @@ func boss_bar(ratio: float, show := true) -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	var glow := 0.0
-	if _craft_hint.text != "":
+	_craft_hint.modulate.a = 1.0
+	if _craft_known:
 		glow = 0.5 + 0.5 * sin(_t * 6.0)
 		_craft_hint.modulate.a = 0.6 + 0.4 * sin(_t * 6.0)
 	for b in _hand_boxes:
