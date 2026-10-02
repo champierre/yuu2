@@ -387,11 +387,34 @@ func pick_item(g: Glyph) -> void:
 	g.queue_free()
 	give(k, from)
 
-## 字を手に持たせる。両手がふさがっていたら、古い方を足元に置く。
+## 字を手に持たせる。字を受け取る口はここ 1 つ（宝箱・落ちている字・祭壇・人が手に来る…）。
+##
+## 両手がふさがっていたら、どれを足元に置くかを遊ぶ人に聞く（#4）。
+## 何を選んでも字は消えない（置いた字は拾い直せる）ので、
+## 宝箱を開けた後など、すでに起きたことを取り消さなくてよい。
 func give(k: String, from := Vector2.INF) -> void:
-	var dropped := hero.give(k)
-	if dropped != "":
+	var dropped := ""
+	if hero.hands_full():
+		var prev := mode
+		mode = "cut"
+		hero.vel = Vector2.ZERO
+		hud.set_prompt("")
+		get_tree().paused = true
+		hud.choose_drop(hero.hands[0], hero.hands[1], k)
+		dropped = await hud.drop_chosen
+		if not is_inside_tree():
+			return
+		get_tree().paused = false
+		_need_release = true
+		if mode == "cut":
+			mode = prev
 		drop_item(dropped, _free_spot_near(hero.position))
+		if dropped == k:
+			hud.toast("「%s」は足元に置いた" % k)
+			return
+		hero.take(dropped)
+	hero.give(k)
+	if dropped != "":
 		hud.toast("「%s」を置いて、「%s」を持った" % [dropped, k])
 	else:
 		var note: String = Kanji.PART_NOTE.get(k, "")

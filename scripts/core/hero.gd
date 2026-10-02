@@ -140,14 +140,15 @@ func holding(k: String) -> bool:
 func hands_full() -> bool:
 	return hands.size() >= 2
 
-## 字を持つ。両手がふさがっていたら、古い方を足元に置いて返す。
-func give(k: String) -> String:
-	var dropped := ""
+## 字を持つ。両手がふさがっていたら持たずに false を返す。
+## 黙って古い方を手放すと、大事な字を落としても気づけない（#4）。
+## どれを置くかは Stage.give() が遊ぶ人に聞く。
+func give(k: String) -> bool:
 	if hands_full():
-		dropped = hands.pop_front()
+		return false
 	hands.append(k)
 	_refresh_hands()
-	return dropped
+	return true
 
 func take(k: String) -> bool:
 	var i := hands.find(k)
