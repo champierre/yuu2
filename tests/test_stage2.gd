@@ -26,7 +26,10 @@ func _test() -> void:
 	await finish_talk()
 	check(hero.holding("失") and not hero.holding("金"), "手に失が残る")
 
-	check(await walk_to(cell(21, 12)), "もう一度宝箱の前へ")
+	## 奪われた場所は町のどこか（盗人の方から寄ってこないので）。
+	## 横にまっすぐ戻ると家に突き当たるので、家の無い 9 段目を通って戻る。
+	var col: int = stage.cell_of(hero.position).x
+	check(await walk_path([cell(col, 9)], true) and await walk_path([cell(20, 9), cell(20, 12), cell(21, 12)]), "もう一度宝箱の前へ")
 	await face("up")
 	await tap("act")
 	check(hero.holding("金") and hero.holding("失"), "金と失を持った")
