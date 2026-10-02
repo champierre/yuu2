@@ -83,6 +83,7 @@ func _build() -> void:
 		"札": func(c): add_sign(c, [
 			["札", "この淵は底が見えない。"],
 			["札", "昔、向こう岸の燭に火がともると、光の橋が架かったという。"],
+			["札", "洞窟の燭をすべて灯した者だけが、奥へ進める。"],
 		]),
 	})
 	## 勇者の手元の明かり。持っているもので広さが変わる。
@@ -93,6 +94,8 @@ func _build() -> void:
 	var beacon := Node2D.new()
 	goal().add_child(beacon)
 	add_light(beacon, 34.0, 0.7)
+	## すべての燭が灯るまでは、目標は沈んだ色。
+	goal().modulate = Color(0.55, 0.5, 0.45, 0.7)
 
 func _abyss(c: Vector2i) -> void:
 	var g := tile(c, "淵", COL_ABYSS, WATER)
@@ -172,11 +175,39 @@ func _light_candle(g: Glyph) -> void:
 	Fx.pop(g, 0.6)
 	Fx.ring(world, g.position, COL_LAMP, 180.0, 0.5, 3.0)
 	Fx.burst(world, g.position, COL_LAMP, 10, "・", 90.0, 10)
-	var lit := 0
+	var lit := _lit_count()
+	if lit < _candles.size():
+		hud.toast("灯がともった（%d / %d）" % [lit, _candles.size()], COL_LAMP)
+		return
+	## 最後の 1 本。目標が光って、奥へ進めるようになる。
+	var gl := goal()
+	gl.modulate = Color.WHITE
+	Fx.ring(world, gl.position, COL_LAMP, 220.0, 0.6, 4.0)
+	Fx.pop(gl, 0.5)
+	Sfx.play("bell")
+	hud.toast("すべての灯がともった！　目標へ", COL_LAMP, 2.4)
+
+func _lit_count() -> int:
+	var n := 0
 	for c in _candles:
 		if c.get_meta("lit"):
-			lit += 1
-	hud.toast("灯がともった（%d / %d）" % [lit, _candles.size()], COL_LAMP)
+			n += 1
+	return n
+
+## すべての燭を灯さないと、目標に入れない。
+func can_clear() -> bool:
+	return _lit_count() >= _candles.size()
+
+var _told_goal := false
+
+func on_goal_blocked() -> void:
+	## 触れ続けている間、何度も出さない。いったん離れたら、また出す。
+	if _told_goal:
+		return
+	_told_goal = true
+	Sfx.play("fail", 1.2)
+	Fx.shake(goal(), 3.0)
+	hud.toast("まだ灯っていない燭がある（%d / %d）" % [_lit_count(), _candles.size()], COL_LAMP)
 
 ## 火矢と炎は、小さな明かりを持って飛ぶ。飛んでいく先が暗がりでも見えるように。
 ## この明かりでは橋は出ない（_light_from_lamps が飛ぶものを数えない）。
@@ -236,6 +267,8 @@ func _light_from_lamps(p: Vector2, with_hero: bool) -> float:
 	return lit
 
 func _stage_process(_delta: float) -> void:
+	if _told_goal and not hero.touching(goal()):
+		_told_goal = false
 	var r := HERO_R
 	if hero.holding("灯"):
 		r = HERO_LANTERN_R

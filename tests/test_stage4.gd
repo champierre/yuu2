@@ -38,6 +38,11 @@ func _test() -> void:
 	await hold("act", 0.8)
 	await sleep(0.5)
 	check(stage.solid_at(Vector2i(29, 12)) == 0 and stage.solid_at(Vector2i(29, 13)) == 0, "二つめの光の橋")
+	## 目標は、すべての燭を灯さないと入れない。
+	## 残りの 4 本（左上・隠し部屋・奥の 2 本）は橋の道筋から外れるので、ここでは直に灯す。
+	## 燭が灯るかどうかそのものは、上の火矢と tests/test_all_lamps.gd で確かめている。
+	for c in stage._candles:
+		stage._light_candle(c)
 	check(await walk_path([cell(30, 11), cell(30, 15), stage.goal().position], true), "目標まで歩ける")
 	await sleep(0.2)
 	check(stage.mode == "clear", "クリアした")

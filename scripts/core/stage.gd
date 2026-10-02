@@ -116,6 +116,14 @@ func on_crafted(_k: String) -> void:
 func on_pick(_k: String) -> void:
 	pass
 
+## 目標に触れたとき、いまクリアしてよいか。条件のあるステージが書き換える。
+func can_clear() -> bool:
+	return true
+
+## 目標に触れたが、まだクリアできないとき（毎コマ呼ばれる）。
+func on_goal_blocked() -> void:
+	pass
+
 # ---------------------------------------------------------------- 組み立て
 
 func _ready() -> void:
@@ -572,7 +580,10 @@ func _process(delta: float) -> void:
 	if mode == "play":
 		_stage_process(delta)
 	if mode == "play" and _goal != null and is_instance_valid(_goal) and _goal.visible and hero.touching(_goal):
-		clear()
+		if can_clear():
+			clear()
+		else:
+			on_goal_blocked()
 
 func _nearest_interact() -> Dictionary:
 	var best := {}
