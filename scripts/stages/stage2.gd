@@ -4,7 +4,8 @@ extends Stage
 ## 【解き方】門番は「金より鉄が貴重だ。鉄を持ってこい」と言う。
 ## 宝箱から出るのは「金」。そのままでは通してもらえない。
 ## 村人は「盗人に気をつけろ」と言うが、裏を返せば道しるべ。
-## わざと盗人に金を奪わせると、手に「失」が残る。
+## 盗人は自分からは寄ってこない。金を持って近づくと、立ち止まってうかがう。
+## 自分から盗人に触れて、わざと金を奪わせると、手に「失」が残る。
 ## もう一度宝箱から金を取り、金＋失＝鉄。失うことで手に入る。
 ##
 ## 【隠し】鍛冶屋の炉から「火」が取れる。火＋火＝炎。
@@ -37,13 +38,14 @@ const COL_LOSS := Color("#7a4d8c")
 
 ## 下の町の広さ（村人と盗人はここから出ない）。
 const TOWN := Rect2(30, 150, 570, 170)
-## 盗人は金に気づくと、この距離から寄ってくる。
+## 金を持った勇者がこの距離に入ると、盗人は立ち止まってうかがう。
 const THIEF_NOTICE := 130.0
 
 var _gates: Array[Glyph] = []
 var _keeper: Glyph
 var _thief: Walker
 var _robbed := false
+var _thief_eyeing := false
 var _gate_open := false
 
 const VILLAGER_LINES := [
@@ -169,15 +171,17 @@ func _open_gate() -> void:
 func _stage_process(_delta: float) -> void:
 	if _thief == null or not is_instance_valid(_thief) or _robbed:
 		return
-	## 金を持っていると、盗人が寄ってくる。
+	## 金を持った勇者が近くにいると、盗人は立ち止まってうかがう。
+	## 自分からは寄ってこない。奪わせるかどうかは、遊ぶ人が決める（#7）。
+	## うろつきも止めるのは、歩いているうちに偶然ぶつかって奪われないようにするため。
 	var d := _thief.position.distance_to(hero.position)
-	if hero.holding("金") and d < THIEF_NOTICE:
-		_thief.active = false
-		_thief.move_toward_point(hero.position, 55.0, get_physics_process_delta_time())
-		if _thief.touching(hero):
-			_rob()
-	else:
-		_thief.active = true
+	var eyeing := hero.holding("金") and d < THIEF_NOTICE
+	_thief.active = not eyeing
+	if eyeing and not _thief_eyeing:
+		Fx.float_text(world, _thief.position + Vector2(0, -20), "へっへっへ…", COL_THIEF, 11)
+	_thief_eyeing = eyeing
+	if hero.holding("金") and _thief.touching(hero):
+		_rob()
 
 ## 金を奪われる。ここが谷であり、答えへの入り口。
 func _rob() -> void:
