@@ -9,12 +9,12 @@ extends Stage
 ##
 ## 洞窟の「蝙」は明かりを嫌う。灯した所がそのまま安全地帯になる。
 ##
-## 【隠し】行き止まりの「丁」。火＋丁＝灯（持ち歩ける明かり。蝙も寄ってこない）。
+## 【隠し】左上の隅、燭を灯すと照らされる所の「丁」。火＋丁＝灯（持ち歩ける明かり。蝙も寄ってこない）。
 ## 火＋火＝炎（放つと蝙を焼き払う）。
 
 const MAP := [
 	"山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山",
-	"山・・・・岩・・・・・・・蝙・・・淵淵・・・・・・・岩・・・・・蝙・・山",
+	"山丁・・・岩・・・・・・・蝙・・・淵淵・・・・・・・岩・・・・・蝙・・山",
 	"山・・燭・岩・・・・・・・・・・・淵淵・・・・・・・岩・・・・・・・・山",
 	"山・・・・岩・・・岩岩岩岩・・・・淵淵・・蝙・・・・岩・・燭・・・・・山",
 	"山・・・・岩・・・・・・岩・・・・淵淵・・・・・・・岩岩岩岩岩・・・・山",
@@ -30,7 +30,7 @@ const MAP := [
 	"山・・・岩・・岩・・燭・・岩・・・淵淵・・・・・・・・・・燭・・・・・山",
 	"山・焚・・・・岩・・・・・岩・・・淵淵・岩岩岩岩岩岩岩・・・・・・・・山",
 	"山・・・・・・岩・・・・・岩・・・淵淵・岩・・・・・岩・・・蝙・・・・山",
-	"山・勇・・箱・岩・・丁・・岩・・・淵淵・岩・・蝙・・岩・・・・標・・・山",
+	"山・勇・・箱・岩・・命・・岩・・・淵淵・岩・・蝙・・岩・・・・標・・・山",
 	"山・・・・・・岩・・・・・岩・・・淵淵・岩・・・・・岩・・・・・・・・山",
 	"山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山山",
 ]
@@ -76,7 +76,9 @@ func _build() -> void:
 		"燭": func(c): _candle(c),
 		"焚": func(c): _bonfire(c),
 		"箱": func(c): add_chest(c, "弓"),
+		## 隠しの丁は、左上の燭を灯すと照らされる隅にある（燭を灯すごほうび）。
 		"丁": func(c): drop_item("丁", cell_center(c)),
+		"命": func(c): drop_heart(cell_center(c)),
 		"蝙": func(c): _bat(cell_center(c)),
 		"札": func(c): add_sign(c, [
 			["札", "この淵は底が見えない。"],
@@ -107,6 +109,7 @@ func _candle(c: Vector2i) -> void:
 	g.set_meta("lit", false)
 	g.add_to_group("shootable")
 	_candles.append(g)
+	_mark_candle(g)
 	add_interact(g, "灯す「燭」", func(): _light_candle(g),
 		func(): return has_fire() and not g.get_meta("lit"))
 	add_interact(g, "調べる「燭」", func(): hud.toast("燭（ろうそく）だ。火があれば灯せる"),
@@ -134,11 +137,32 @@ func _bat(pos: Vector2) -> void:
 	b.position = pos
 	world.add_child(b)
 
+## 灯っていない燭の目印。暗がりでも在りかが分かるよう、闇より手前にうっすら描き、
+## 芯に小さな火種をちらつかせる。狙う先が見えないと、火矢を当てずっぽうに射ることになる（#20）。
+func _mark_candle(g: Glyph) -> void:
+	var mark := Node2D.new()
+	mark.position = g.position
+	glow_layer().add_child(mark)
+	var ghost := Glyph.make("燭", Color(COL_CANDLE, 0.28), 22)
+	ghost.shadow = false
+	mark.add_child(ghost)
+	var ember := Glyph.make("・", Color(1.0, 0.55, 0.15, 0.9), 12)
+	ember.shadow = false
+	ember.position = Vector2(0, -14)
+	mark.add_child(ember)
+	var tw := ember.create_tween().set_loops()
+	tw.tween_property(ember, "modulate:a", 0.35, 0.4).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(ember, "modulate:a", 1.0, 0.4).set_trans(Tween.TRANS_SINE)
+	g.set_meta("mark", mark)
+
 ## 燭に火が移って、灯になる。
 func _light_candle(g: Glyph) -> void:
 	if g.get_meta("lit"):
 		return
 	g.set_meta("lit", true)
+	var mark = g.get_meta("mark", null)
+	if mark != null and is_instance_valid(mark):
+		mark.queue_free()
 	g.set_meta("lamp", true)
 	g.text = "灯"
 	g.color = COL_LAMP
@@ -153,6 +177,27 @@ func _light_candle(g: Glyph) -> void:
 		if c.get_meta("lit"):
 			lit += 1
 	hud.toast("灯がともった（%d / %d）" % [lit, _candles.size()], COL_LAMP)
+
+## 火矢と炎は、小さな明かりを持って飛ぶ。飛んでいく先が暗がりでも見えるように。
+## この明かりでは橋は出ない（_light_from_lamps が飛ぶものを数えない）。
+func fire_shot(t: String, power: float, fire: bool) -> Shot:
+	var s := super.fire_shot(t, power, fire)
+	if fire:
+		add_light(s, 46.0, 0.85)
+	return s
+
+## 外れた火矢は、落ちた所で火の粉を散らして「じゅっ」と消える。
+func on_shot_wall(shot: Shot) -> void:
+	_fizzle(shot)
+
+func on_shot_spent(shot: Shot) -> void:
+	_fizzle(shot)
+
+func _fizzle(shot: Shot) -> void:
+	if not shot.fire:
+		return
+	Sfx.play("fire", 1.7, -8.0)
+	Fx.burst(glow_layer(), shot.global_position, COL_LAMP, 6, "・", 60.0, 9)
 
 func on_shot_hit(shot: Shot, target: Glyph) -> bool:
 	if _candles.has(target):
@@ -179,6 +224,9 @@ func _light_from_lamps(p: Vector2, with_hero: bool) -> float:
 	for l in _lights:
 		var n: Node2D = l["node"]
 		if n == _hero_light and not with_hero:
+			continue
+		## 飛んでいる火矢の明かりは数えない（通り過ぎるだけで橋が出たり、蝙が逃げたりしないように）。
+		if n is Shot:
 			continue
 		if not is_instance_valid(n) or not n.is_inside_tree():
 			continue
