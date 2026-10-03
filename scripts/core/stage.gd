@@ -931,7 +931,7 @@ func fire_shot(t: String, power: float, fire: bool) -> Shot:
 	s.fire = fire
 	s.speed = 200.0 + 320.0 * power
 	## 引きが浅いとほとんど飛ばない。しっかりためて、ようやく遠くまで届く。
-	s.reach = 30.0 + 400.0 * power * power
+	s.reach = 30.0 + 530.0 * power * power
 	if t == "炎":
 		s.reach = 320.0
 		s.speed = 260.0

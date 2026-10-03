@@ -125,7 +125,8 @@ func walk_route(target: Vector2i) -> bool:
 			break
 		for d in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 			var n: Vector2i = c + d
-			if prev.has(n) or stage.solid_at(n) != stage.FREE:
+			## 地形だけでなく、人など通り抜けられないものも避ける。
+			if prev.has(n) or (n != target and stage.blocked(Rect2(stage.cell_center(n) - Vector2(7, 7), Vector2(14, 14)))):
 				continue
 			prev[n] = c
 			q.append(n)
