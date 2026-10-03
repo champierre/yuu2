@@ -902,6 +902,8 @@ func _process_charge(delta: float) -> void:
 				Fx.flash(hero, 0.2)
 				Fx.ring(world, hero.position, Color("#e0561b"), 80.0, 0.25, 2.0)
 		hero.color = Color("#1a1a1a").lerp(Color("#d0402a"), _charge)
+		## いま放すと矢が届く所まで、照準を伸ばす。
+		hero.aim_reach = ARROW_START + arrow_reach(_charge)
 		var k := _charge * 0.18
 		hero.squash = Vector2(1.0 + k, 1.0 - k * 0.5)
 		return
@@ -911,6 +913,7 @@ func _process_charge(delta: float) -> void:
 
 func _end_charge() -> void:
 	_charge = -1.0
+	hero.aim_reach = 0.0
 	hero.speed_scale = 1.0
 	hero.color = Color("#1a1a1a")
 
@@ -924,6 +927,13 @@ func fire_arrow(power: float) -> Shot:
 	Sfx.play("shoot", 0.8 + power * 0.4)
 	return s
 
+## 矢は、勇者の真ん中からこれだけ先に現れる。
+const ARROW_START := 14.0
+
+## 矢が飛ぶ距離。引きが浅いとほとんど飛ばない。しっかりためて、ようやく遠くまで届く。
+static func arrow_reach(power: float) -> float:
+	return 30.0 + 530.0 * power * power
+
 func fire_shot(t: String, power: float, fire: bool) -> Shot:
 	var s := Shot.new()
 	s.stage = self
@@ -935,13 +945,12 @@ func fire_shot(t: String, power: float, fire: bool) -> Shot:
 	s.power = power
 	s.fire = fire
 	s.speed = 200.0 + 320.0 * power
-	## 引きが浅いとほとんど飛ばない。しっかりためて、ようやく遠くまで届く。
-	s.reach = 30.0 + 530.0 * power * power
+	s.reach = arrow_reach(power)
 	if t == "炎":
 		s.reach = 320.0
 		s.speed = 260.0
 		s.damage = 3
-	s.position = hero.position + hero.facing * 14.0
+	s.position = hero.position + hero.facing * ARROW_START
 	world.add_child(s)
 	return s
 

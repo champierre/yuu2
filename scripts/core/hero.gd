@@ -18,6 +18,12 @@ var speed_scale := 1.0
 ## 両手の字。最大 2 つ。新しく持ったものが後ろ。
 var hands: Array[String] = []
 var _hand_glyphs: Array[Glyph] = []
+## 手の字の高さ。ふだんは肩のあたり。向きの三角と重ならないよう、向きに合わせてよける。
+## 斜め上を向いたときは腰まで下げ、真横を向いたときは少し上げる。
+const HAND_Y := -12.0
+const HAND_Y_LOW := 4.0
+const HAND_Y_HIGH := -16.0
+var _hand_y := HAND_Y
 
 var max_hp := 3
 var hp := 3
@@ -26,6 +32,11 @@ var invuln := 0.0
 var _bob := 0.0
 var _dust := 0.0
 var _hurt_flash := 0.0
+
+## 弓を引き絞っている間、いま放すと矢が届く距離（勇者の真ん中から）。0 なら引いていない。
+## Stage が毎コマ書く。向きの印が、ここまで点線の照準を伸ばす。
+var aim_reach := 0.0
+var _aim: Aim
 
 func _ready() -> void:
 	text = "勇"
@@ -41,6 +52,22 @@ func _ready() -> void:
 		add_child(g)
 		_hand_glyphs.append(g)
 	_refresh_hands()
+	_aim = Aim.new()
+	_aim.hero = self
+	## 闇より手前の層に置く。手の字より手前に描け、暗がりでも照準が見える。
+	## （層が別なので、毎コマ場所を合わせる）
+	if stage != null:
+		stage.glow_layer().add_child(_aim)
+	else:
+		_aim.z_index = 2
+		add_child(_aim)
+
+func _exit_tree() -> void:
+	if _aim != null and is_instance_valid(_aim) and _aim.get_parent() != self:
+		_aim.queue_free()
+
+func aim() -> Aim:
+	return _aim
 
 func _process(delta: float) -> void:
 	if invuln > 0.0:
@@ -50,7 +77,9 @@ func _process(delta: float) -> void:
 		if invuln <= 0.0:
 			modulate.a = 1.0
 	_bob += delta
+	_hand_y = lerpf(_hand_y, _hand_y_target(), 1.0 - exp(-delta * 20.0))
 	_place_hands()
+	_aim.follow()
 
 func _physics_process(delta: float) -> void:
 	var input := Vector2.ZERO
@@ -124,13 +153,64 @@ func _free_at(off: Vector2) -> bool:
 	position -= off
 	return ok
 
-func _draw() -> void:
-	super._draw()
-	## 向いている方に小さな三角を出す（矢や斧の向きが分かるように）。
-	var tip := facing * 16.0
-	var side := facing.orthogonal() * 3.5
-	var base := facing * 11.0
-	draw_colored_polygon(PackedVector2Array([tip, base + side, base - side]), Color(0.1, 0.1, 0.1, 0.55))
+## 向きの印。向いている方に三角を出し、弓を引き絞っている間は点線の照準を伸ばす。
+##
+## 三角は「勇」の字と手の字の外に出し、それらより手前に描く。斜めを向いたとき、
+## 肩に浮かせた手の字や「勇」の角に隠れて、向きが分からなくなっていた（#38）。
+class Aim extends Node2D:
+	## 三角の根元と先（勇者の真ん中から）と、幅の半分。
+	const BASE := 19.0
+	const TIP := 26.0
+	const HALF := 4.5
+	## 点線の照準。この距離から、この間隔で点を打つ。
+	const DOT_FROM := 32.0
+	const DOT_STEP := 9.0
+	const INK := Color(0.1, 0.1, 0.1, 0.85)
+	const PAPER := Color("#f6f0e2")
+	const DOT := Color("#d0402a")
+
+	var hero: Hero
+	var _facing := Vector2.ZERO
+	var _reach := -1.0
+
+	## 勇者について行き、向きや引き絞りが変わったら描き直す。
+	func follow() -> void:
+		global_position = hero.global_position
+		visible = hero.is_visible_in_tree() and hero.hp > 0
+		if _facing != hero.facing or _reach != hero.aim_reach:
+			_facing = hero.facing
+			_reach = hero.aim_reach
+			queue_redraw()
+
+	## 三角の 3 つの角（勇者の真ん中から）。
+	func triangle() -> PackedVector2Array:
+		var f := hero.facing
+		var side := f.orthogonal() * HALF
+		return PackedVector2Array([f * TIP, f * BASE + side, f * BASE - side])
+
+	## 照準の点（勇者の真ん中から）。矢が止まる壁の手前まで。
+	func dots() -> PackedVector2Array:
+		var out := PackedVector2Array()
+		var d := DOT_FROM
+		while d <= hero.aim_reach:
+			var p := hero.facing * d
+			if hero.stage != null and hero.stage.shot_blocked(hero.global_position + p):
+				break
+			out.append(p)
+			d += DOT_STEP
+		return out
+
+	func _draw() -> void:
+		var tri := triangle()
+		draw_colored_polygon(tri, INK)
+		## 字や暗い地面の上でも見えるよう、明るい縁を付ける。
+		draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]), PAPER, 1.2, true)
+		var pts := dots()
+		for i in pts.size():
+			## 先へ行くほど小さく、薄く。
+			var t := float(i) / maxf(1.0, pts.size())
+			draw_circle(pts[i], 2.2 - t * 0.8, Color(PAPER, 0.7 - t * 0.3))
+			draw_circle(pts[i], 1.5 - t * 0.6, Color(DOT, 0.95 - t * 0.35))
 
 # ---------------------------------------------------------------- 手
 
@@ -182,6 +262,15 @@ func _hand_color(k: String) -> Color:
 		"失": return Color("#7a4d8c")
 	return Color("#3a3a3a")
 
+## 斜め上を向いているときは、肩の所がちょうど向きの三角の場所になる。
+## 真横を向いているときは、三角の上の角が手の字の下の端に掛かる。
+func _hand_y_target() -> float:
+	if facing.y < -0.1 and absf(facing.x) > 0.1:
+		return HAND_Y_LOW
+	if absf(facing.y) < 0.1:
+		return HAND_Y_HIGH
+	return HAND_Y
+
 func _place_hands() -> void:
 	## 持っている字は、勇者の左右の肩のあたりに浮かせる。
 	var n := hands.size()
@@ -192,7 +281,7 @@ func _place_hands() -> void:
 		var x := -15.0 if (n == 2 and i == 0) else 15.0
 		if n == 1:
 			x = 15.0
-		g.position = Vector2(x, -12.0 + sin(_bob * 3.0 + i * 1.7) * 1.5)
+		g.position = Vector2(x, _hand_y + sin(_bob * 3.0 + i * 1.7) * 1.5)
 
 func hand_glyph(k: String) -> Glyph:
 	var i := hands.find(k)
