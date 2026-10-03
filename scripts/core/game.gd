@@ -29,6 +29,12 @@ var deaths := 0
 ## ?debug=true（Web）/ -- debug=true / エディタから起動したとき。
 var debug := false
 
+## 「ステージを選ぶ」から始めた面か。そうなら、クリアのあと選ぶ画面へ戻ることもできる。
+## （隠れた字を探しに戻ったのに、次のステージへ押し出されないように）
+var from_select := false
+## 次にタイトルを開いたとき、メニューではなくステージを選ぶ画面から始める。
+var title_to_select := false
+
 var _fade: CanvasLayer
 var _fade_rect: ColorRect
 var _changing := false
@@ -334,6 +340,11 @@ func goto_next_stage() -> void:
 		goto_stage(stage_no + 1)
 
 func goto_title() -> void:
+	change_scene(TITLE_SCENE)
+
+## タイトルの、ステージを選ぶ画面へ戻る。
+func goto_stage_select() -> void:
+	title_to_select = true
 	change_scene(TITLE_SCENE)
 
 ## 墨が閉じるように暗くしてから場面を変え、また開く。
