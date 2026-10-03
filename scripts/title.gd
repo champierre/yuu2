@@ -61,7 +61,13 @@ func _ready() -> void:
 		_debug_badge.outline_color = PAPER
 		_debug_badge.position = Vector2(470, 30)
 		add_child(_debug_badge)
-	_show_menu()
+	if Game.title_to_select:
+		## ステージを選んで遊んだあとは、選ぶ画面に、いま遊んだ面を指して戻る。
+		Game.title_to_select = false
+		_sel = clampi(Game.stage_no - 1, 0, Game.STAGES.size() - 1)
+		_show_stages()
+	else:
+		_show_menu()
 	Sfx.bgm("title")
 	Sfx.prepare("field")
 
@@ -237,6 +243,7 @@ func _input_prologue() -> void:
 func _start_game() -> void:
 	Sfx.play("confirm")
 	_busy = true
+	Game.from_select = false
 	Game.goto_stage(1)
 
 # ---------------------------------------------------------------- ステージを選ぶ
@@ -265,6 +272,7 @@ func _choose_stage(i: int) -> void:
 		return
 	Sfx.play("confirm")
 	_busy = true
+	Game.from_select = true
 	Game.goto_stage(s["no"])
 
 # ---------------------------------------------------------------- 字典

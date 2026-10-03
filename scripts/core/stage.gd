@@ -65,6 +65,9 @@ var _need_release := false
 var _swing_cd := 0.0
 var _leaving := false
 var _clear_ready := false
+## クリアのあとの行き先の選択肢（ステージを選んで始めた面だけ）。0: 次へ　1: ステージを選ぶ
+var _clear_items: Array[Glyph] = []
+var _clear_sel := 0
 var _lights: Array = []
 var _t := 0.0
 
@@ -545,11 +548,8 @@ func _process(delta: float) -> void:
 	_update_camera(delta)
 	_update_lights()
 	if mode == "clear":
-		if _clear_ready and (Input.is_action_just_pressed("act") or Input.is_action_just_pressed("ui_accept")):
-			_clear_ready = false
-			Sfx.play("confirm")
-			_leaving = true
-			Game.goto_next_stage()
+		if _clear_ready:
+			_process_clear()
 		return
 	if mode != "play":
 		hero.can_move = false
@@ -992,6 +992,8 @@ func clear() -> void:
 	hitstop(0.12)
 	Fx.ring(world, _goal.position, Color("#d9a400"), 260.0, 0.6, 5.0)
 	Fx.burst(world, _goal.position, Color("#d9a400"), 20, "・＊", 200.0, 12)
+	## 前にもクリアした面か（記録を書く前に見る）。
+	var again: bool = Game.cleared.has(number())
 	var best := Game.mark_cleared(number(), play_time)
 	if not await wait(0.5):
 		return
@@ -1005,17 +1007,70 @@ func clear() -> void:
 	hud.add_child(tt)
 	if not await wait(0.5):
 		return
-	var nxt := "%s 次へ" % TouchPad.act_name()
 	hud.set_prompt("")
-	var hint := Glyph.make(nxt, Hud.RED, 15)
-	hint.outline = 5
-	hint.outline_color = Color("#f6f0e2")
-	hint.position = Vector2(320, 285)
-	hud.add_child(hint)
-	var tw := hint.create_tween().set_loops()
-	tw.tween_property(hint, "modulate:a", 0.3, 0.5)
-	tw.tween_property(hint, "modulate:a", 1.0, 0.5)
+	if Game.from_select:
+		_show_clear_choices(again)
+	else:
+		var hint := Glyph.make("%s 次へ" % TouchPad.act_name(), Hud.RED, 15)
+		hint.outline = 5
+		hint.outline_color = Color("#f6f0e2")
+		hint.position = Vector2(320, 285)
+		hud.add_child(hint)
+		var tw := hint.create_tween().set_loops()
+		tw.tween_property(hint, "modulate:a", 0.3, 0.5)
+		tw.tween_property(hint, "modulate:a", 1.0, 0.5)
 	_clear_ready = true
+
+## ステージを選んで始めた面では、クリアのあと「次へ」か「ステージを選ぶ」かを選べる。
+## 隠れた字を探しに戻った人が、次のステージ（終の章ならエンディング）へ
+## 押し出されないようにする。前にもクリアした面なら、選ぶ画面へ戻る方を先に指す。
+func _show_clear_choices(again: bool) -> void:
+	var last: bool = number() >= Game.STAGES.size()
+	var names := ["エンディングへ" if last else "次へ", "ステージを選ぶ"]
+	for i in names.size():
+		var g := Glyph.make(names[i], INK, 15)
+		g.set_meta("base", names[i])
+		g.outline = 5
+		g.outline_color = Color("#f6f0e2")
+		g.position = Vector2(240 + i * 160, 285)
+		hud.add_child(g)
+		_clear_items.append(g)
+	var keys := "左右" if TouchPad.needed() else "←→"
+	var guide := Glyph.make("%s 選ぶ　%s 決める" % [keys, TouchPad.act_name()], Hud.SUB, 11)
+	guide.shadow = false
+	guide.outline = 4
+	guide.outline_color = Color("#f6f0e2")
+	guide.position = Vector2(320, 312)
+	hud.add_child(guide)
+	_clear_sel = 1 if again else 0
+	_refresh_clear_choices()
+
+func _refresh_clear_choices() -> void:
+	for i in _clear_items.size():
+		var g := _clear_items[i]
+		var on := i == _clear_sel
+		var base: String = g.get_meta("base")
+		g.text = ("▶ " + base) if on else base
+		g.color = Hud.RED if on else INK
+		if on:
+			Fx.pop(g, 0.15)
+
+func _process_clear() -> void:
+	if _clear_items.size() > 1:
+		for a in ["ui_left", "ui_right", "ui_up", "ui_down"]:
+			if Input.is_action_just_pressed(a):
+				_clear_sel = 1 - _clear_sel
+				Sfx.play("select")
+				_refresh_clear_choices()
+				return
+	if Input.is_action_just_pressed("act") or Input.is_action_just_pressed("ui_accept"):
+		_clear_ready = false
+		Sfx.play("confirm")
+		_leaving = true
+		if _clear_items.size() > 1 and _clear_sel == 1:
+			Game.goto_stage_select()
+		else:
+			Game.goto_next_stage()
 
 static func fmt_time(sec: float) -> String:
 	var m := int(sec) / 60
