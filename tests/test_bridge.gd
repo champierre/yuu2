@@ -30,3 +30,37 @@ func _test() -> void:
 			stage._light_candle(c)
 	await sleep(0.3)
 	check(stage.solid_at(bridge) == 0, "燭を灯すと、橋が現れる")
+
+	## 橋は、向こう岸の燭を灯したときに、まるごと現れる。
+	## 手前の岸の燭が近いと、橋の 1 マスだけが半端に現れてしまう（#55）。
+	await open("res://scenes/stage4.tscn")
+	clear_enemies()
+	var first: Array[Vector2i] = [Vector2i(17, 6), Vector2i(18, 6)]
+	var second: Array[Vector2i] = [Vector2i(29, 12), Vector2i(30, 12), Vector2i(29, 13), Vector2i(30, 13)]
+	var far := {Vector2i(19, 5): first, Vector2i(29, 14): second}
+	for c in stage._candles:
+		if not far.has(stage.cell_of(c.position)):
+			stage._light_candle(c)
+	await sleep(0.3)
+	check(_count(first) == 0 and _count(second) == 0, "向こう岸の燭のほかを全部灯しても、橋は 1 マスも現れない")
+	for b in first + second:
+		check(stage.bridge_light_at(stage.cell_center(b)) < stage.BRIDGE_LIT * 0.5, "橋 %s には、手前の明かりがほとんど届かない" % b)
+	for c in stage._candles:
+		if stage.cell_of(c.position) == Vector2i(29, 14):
+			stage._light_candle(c)
+	await sleep(0.3)
+	check(_count(second) == second.size(), "二つめの橋は、向こう岸の燭でまるごと現れる")
+	check(_count(first) == 0, "一つめの橋は、まだ現れない")
+	for c in stage._candles:
+		if stage.cell_of(c.position) == Vector2i(19, 5):
+			stage._light_candle(c)
+	await sleep(0.3)
+	check(_count(first) == first.size(), "一つめの橋も、向こう岸の燭でまるごと現れる")
+
+## 渡れるようになっている橋のマスの数。
+func _count(cells: Array[Vector2i]) -> int:
+	var n := 0
+	for c in cells:
+		if stage.solid_at(c) == 0:
+			n += 1
+	return n
