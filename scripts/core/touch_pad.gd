@@ -1,6 +1,10 @@
 class_name TouchPad
 extends CanvasLayer
-## スマホ・タブレットで遊ぶための、画面の上のボタン。
+## スマホ・タブレットで遊ぶための、画面のボタン。
+##
+## 横に持ったときは遊びの画面に重ねて出す（BUTTONS）。
+## 縦に持ったときは、遊びの画面の下の帯に大きく並べる（STACKED）。
+## どちらにするかは Game が窓の形から決める（Game.stacked）。
 ##
 ## 押すと Input.action_press を呼ぶので、遊びの側はキーボードと同じ書き方でよい。
 ## （InputEventAction を流すやり方だと、押した瞬間を 1 コマ取りこぼすことがある）
@@ -14,6 +18,20 @@ const BUTTONS := [
 	{"text": "合", "action": "craft", "pos": Vector2(522, 318), "r": 26},
 	{"text": "止", "action": "pause", "pos": Vector2(612, 72), "r": 16},
 ]
+## 縦持ちのときの並び。帯の真ん中からの位置と、大きさ。
+## 帯はいちばん低くても 280 あるので、上下 140 の中に収めてある。
+## 640 の幅が 390px ほどに縮むので、横持ちより大きくしている（止 でも直径 44px ほど）。
+const STACKED := {
+	"up": {"off": Vector2(-196, -72), "r": 40},
+	"down": {"off": Vector2(-196, 72), "r": 40},
+	"left": {"off": Vector2(-268, 0), "r": 40},
+	"right": {"off": Vector2(-124, 0), "r": 40},
+	"act": {"off": Vector2(236, 20), "r": 52},
+	"craft": {"off": Vector2(120, 60), "r": 40},
+	"pause": {"off": Vector2(280, -100), "r": 26},
+}
+## 指が当たったとみなす広さは、見た目よりこれだけ大きく取る。
+const REACH := 10.0
 ## 同じ act でも、メニューでは ui_accept を見るので、いっしょに押す。
 const ALSO := {
 	"act": ["ui_accept"],
@@ -24,9 +42,17 @@ const ALSO := {
 
 var _pressed := {}   ## 指の id -> action
 var _glyphs := {}
+## autoload の Game。`Game` と名前で書くと、テスト（--script）がこのファイルを
+## 先に読んだとき、まだ autoload が登録されておらず、読み込みに失敗する。
+var _game: Node
+
+## テストで、指で遊ぶ機械のふりをする。
+static var pretend := false
 
 ## この端末で画面のボタンが要るか。
 static func needed() -> bool:
+	if pretend:
+		return true
 	if DisplayServer.is_touchscreen_available():
 		return true
 	var os := OS.get_name()
@@ -56,23 +82,63 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	for b in BUTTONS:
 		var bg := _Circle.new()
-		bg.radius = b["r"]
-		bg.position = b["pos"]
 		add_child(bg)
 		var g := Glyph.make(b["text"], Color(0.2, 0.2, 0.2, 0.75), int(b["r"] * 0.9))
 		g.shadow = false
-		g.position = b["pos"]
 		add_child(g)
 		_glyphs[b["action"]] = [g, bg]
+	_game = get_node("/root/Game")
+	_game.layout_changed.connect(_layout)
+	_layout()
+
+## ボタンを、いまの並べ方（重ねる／下の帯に並べる）の場所に置く。
+func _layout() -> void:
+	## 置き場所が変わるので、押したままのものは離す。
+	for finger in _pressed.keys():
+		_release(finger)
+	for b in BUTTONS:
+		var a: String = b["action"]
+		var g: Glyph = _glyphs[a][0]
+		var bg: _Circle = _glyphs[a][1]
+		bg.radius = button_r(a)
+		bg.solid = _game.stacked
+		bg.position = button_pos(a)
+		g.size = int(button_r(a) * 0.9)
+		g.position = button_pos(a)
+
+## ボタンの真ん中（640x360 と同じ物差し。縦持ちでは y が 360 より下になる）。
+func button_pos(action: String) -> Vector2:
+	if _game.stacked:
+		return Vector2(320, 360 + _game.pad_height * 0.5) + STACKED[action]["off"]
+	for b in BUTTONS:
+		if b["action"] == action:
+			return b["pos"]
+	return Vector2.ZERO
+
+func button_r(action: String) -> float:
+	if _game.stacked:
+		return STACKED[action]["r"]
+	for b in BUTTONS:
+		if b["action"] == action:
+			return b["r"]
+	return 0.0
 
 class _Circle extends Node2D:
-	var radius := 24.0
+	var radius := 24.0:
+		set(v):
+			radius = v
+			queue_redraw()
+	## 帯の上では、下に透かすものが無いので、はっきり塗る。
+	var solid := false:
+		set(v):
+			solid = v
+			queue_redraw()
 	var on := false:
 		set(v):
 			on = v
 			queue_redraw()
 	func _draw() -> void:
-		var c := Color(0.73, 0.19, 0.14, 0.45) if on else Color(1, 1, 1, 0.35)
+		var c := Color(0.73, 0.19, 0.14, 0.45) if on else Color(1, 1, 1, 0.8 if solid else 0.35)
 		draw_circle(Vector2.ZERO, radius, c)
 		draw_arc(Vector2.ZERO, radius, 0, TAU, 32, Color(0.2, 0.2, 0.2, 0.4), 1.5, true)
 
@@ -94,8 +160,9 @@ func _input(event: InputEvent) -> void:
 
 func _find(p: Vector2) -> String:
 	for b in BUTTONS:
-		if p.distance_to(b["pos"]) <= b["r"] + 10:
-			return b["action"]
+		var a: String = b["action"]
+		if p.distance_to(button_pos(a)) <= button_r(a) + REACH:
+			return a
 	return ""
 
 func _press_at(p: Vector2, finger: int) -> void:

@@ -91,11 +91,18 @@ if not await wait(0.5): return
 どのボタンも外れる（実際にそれでスマホで何も押せなかった）。
 ヘッドレスの窓は 64x64 で倍率が 1 でないので、`tests/test_touch.gd` が見張っている。
 
-### 12. 縦持ちの回転は `global_canvas_transform` でやる。Window の 640x360 は変えない
+### 12. スマホの縦持ちは `global_canvas_transform` で並べる。Window の 640x360 は変えない
 
-`Game._update_orientation()`。`content_scale_size` を 360x640 に入れ替えると、
-Camera2D と `Dark` が画面の大きさを見ていて壊れる。`global_canvas_transform` なら
-描画も `_input` の座標も Window がまとめて直す。`tests/test_portrait.gd` が見張っている。
+縦持ちでは遊びの画面を上に、ボタンを下の帯に並べる（`Game._update_layout()`）。
+`content_scale_size` を縦に伸ばすと、Camera2D と `Dark` が画面の大きさを見ていて壊れる。
+`global_canvas_transform` で絵を窓の上に寄せれば、描画も `_input` の座標も Window がまとめて直す。
+ボタンは y が 360 より下に置かれる。場所は `TouchPad.button_pos()` に聞く。
+
+並べ直しは `size_changed` の中でやらず、`call_deferred` で後に回している。
+Window が大きさを決め直している途中に比の扱いを変えると、古い計算で上書きされ、
+持つ向きを変えたときだけ絵が窓いっぱいに引き伸ばされる。**これはヘッドレスでは見えない**
+（`tests/test_portrait.gd` は座標の変換までしか見張れない）。ここを触ったら、Web 版を書き出し、
+ブラウザをスマホの大きさにして、縦→横→縦と変えて目で確かめる。
 
 ## テストの書き方
 

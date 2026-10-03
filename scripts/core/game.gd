@@ -40,7 +40,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	debug = _detect_debug()
 	_build_fade()
-	_watch_orientation()
+	_watch_layout()
 	load_save()
 
 # ---------------------------------------------------------------- 入力
@@ -110,48 +110,110 @@ func _add_axis(action: String, axis: JoyAxis, dir: float) -> void:
 
 # ---------------------------------------------------------------- 縦持ち
 
-## 縦持ちのスマホでも、横向きのまま遊べるようにする。
-## 窓が縦長のときは、640x360 の絵をまるごと 90 度回して、縦の窓いっぱいに出す。
+## 指で遊ぶ機械を縦に持ったときは、遊びの画面を上に、操作のボタンを下に並べる。
+## 横に持ったとき（とパソコン）は今までどおりで、ボタンは遊びの画面に重ねて出す。
 ##
-## Window の 640x360 は変えない。content_scale_size を入れ替えると、カメラや暗がりが
-## 画面の大きさを見ていて壊れる。global_canvas_transform で回せば、描くものも
-## 指の座標も Window がまとめて直してくれるので、遊びの側は何も知らなくてよい。
-func _watch_orientation() -> void:
-	get_window().size_changed.connect(_update_orientation)
-	_update_orientation()
+## Window の 640x360 は変えない。content_scale_size を縦に伸ばすと、カメラや暗がりが
+## 画面の大きさを見ていて壊れる。global_canvas_transform で 640x360 の絵を窓の上に寄せ、
+## その下（y が 360 より先）にボタンを置く。描くものも指の座標も Window がまとめて
+## 直してくれるので、遊びの側は何も知らなくてよい。
 
-func _update_orientation() -> void:
+## 並べ方が変わった（窓の大きさや向きが変わった）。TouchPad がボタンを置き直す。
+signal layout_changed
+
+## ボタンを置く帯の色と、遊びの画面との境目の線。
+const PAD_BG := Color(0.905, 0.875, 0.805)
+const PAD_LINE := Color(0.2, 0.2, 0.2, 0.35)
+
+## 遊びの画面の下に、ボタンの帯を並べているか。
+var stacked := false
+## 帯の高さ（640x360 と同じ物差し）。並べていないときは 0。
+var pad_height := 0.0
+
+var _pad_back: CanvasLayer
+var _layout_queued := false
+
+func _watch_layout() -> void:
+	_build_pad_back()
+	get_window().size_changed.connect(_on_window_resized)
+	_update_layout()
+
+## size_changed は、Window が大きさを決め直している途中で届く。
+## その場で比の扱いを変えると、Window は戻ったあと古い計算の続きで上書きし、
+## 絵が窓いっぱいに引き伸ばされる（持つ向きを変えたときにだけ起きる）。
+## 決め直しが済んでから並べ直す。
+func _on_window_resized() -> void:
+	if _layout_queued:
+		return
+	_layout_queued = true
+	_update_layout.call_deferred()
+
+func _update_layout() -> void:
+	## ここで比の扱いを変えると size_changed がまた届く。それは数えない。
+	_layout_queued = true
 	var win := get_window()
 	var size := Vector2(win.size)
-	if size.y > size.x:
-		## 比を保つ引き伸ばしに任せると、横幅に合わせて小さくなってしまう。
-		## 比を無視させ（縦横別の倍率になる）、その逆を掛けたうえで回す。
+	stacked = TouchPad.needed() and is_portrait(size)
+	if stacked:
+		## 比を保つ引き伸ばしに任せると、絵は窓の真ん中に来て、下に帯を置けない。
+		## 比を無視させ（縦横別の倍率になる）、その逆を掛けたうえで上に寄せる。
 		win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
-		win.global_canvas_transform = portrait_transform(size)
-		win.oversampling_override = portrait_scale(size)
+		win.global_canvas_transform = stacked_transform(size)
+		win.oversampling_override = stacked_scale(size)
+		pad_height = stacked_pad_height(size)
 	else:
 		win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
 		win.global_canvas_transform = Transform2D.IDENTITY
 		win.oversampling_override = 0.0
+		pad_height = 0.0
+	_pad_back.visible = stacked
+	_layout_queued = false
+	layout_changed.emit()
 
-## 縦長の窓 win（画素）に、640x360 の絵を回して収める倍率。
-static func portrait_scale(win: Vector2) -> float:
-	return minf(win.x / 360.0, win.y / 640.0)
+## 遊びの画面より下を、帯の色で塗りつぶす。
+## 塗らないと、カメラの外にある地図の続きが、そのまま下に見えてしまう。
+## ボタン（TouchPad）は場面ごとに作り直すので、塗るのはここで持つ。
+func _build_pad_back() -> void:
+	_pad_back = CanvasLayer.new()
+	_pad_back.layer = 39
+	_pad_back.visible = false
+	add_child(_pad_back)
+	var bg := ColorRect.new()
+	bg.color = PAD_BG
+	bg.position = Vector2(0, 360)
+	## 窓がどれだけ縦に長くても足りる高さ。
+	bg.size = Vector2(640, 4000)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pad_back.add_child(bg)
+	var line := ColorRect.new()
+	line.color = PAD_LINE
+	line.position = Vector2(0, 360)
+	line.size = Vector2(640, 2)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pad_back.add_child(line)
 
-## 640x360 の座標 → 縦長の窓の座標（画素）。
-## 本体を右に倒して持つ向き（本体の上が右、下が左に来る）に回す。
-## 絵の上（y=0 の辺）は、縦に持っている間は本体の左の辺に来る。
-static func portrait_screen_transform(win: Vector2) -> Transform2D:
-	var k := portrait_scale(win)
-	var pad := (win - Vector2(360, 640) * k) / 2.0
-	## (x, y) → (y, 640 - x) を k 倍して、余白の分ずらす。
-	return Transform2D(Vector2(0, -k), Vector2(k, 0), Vector2(0, 640 * k) + pad)
+## 縦長の窓か。縦長なら、横幅いっぱいに絵を出しても、下に帯（280 以上）が残る。
+static func is_portrait(win: Vector2) -> bool:
+	return win.y > win.x
+
+## 縦長の窓 win（画素）の横幅いっぱいに、640x360 の絵を出す倍率。
+static func stacked_scale(win: Vector2) -> float:
+	return win.x / 640.0
+
+## 絵の下に残る帯の高さ（640x360 と同じ物差し）。
+static func stacked_pad_height(win: Vector2) -> float:
+	return win.y / stacked_scale(win) - 360.0
+
+## 640x360 の座標 → 縦長の窓の座標（画素）。絵は窓の上の端に付ける。
+static func stacked_screen_transform(win: Vector2) -> Transform2D:
+	var k := stacked_scale(win)
+	return Transform2D(Vector2(k, 0), Vector2(0, k), Vector2.ZERO)
 
 ## global_canvas_transform に置く値。比を無視した stretch（縦横別の倍率）が
 ## この後に掛かるので、その逆を先に掛けておく。合わせると上の変換になる。
-static func portrait_transform(win: Vector2) -> Transform2D:
+static func stacked_transform(win: Vector2) -> Transform2D:
 	var unstretch := Transform2D(Vector2(640.0 / win.x, 0), Vector2(0, 360.0 / win.y), Vector2.ZERO)
-	return unstretch * portrait_screen_transform(win)
+	return unstretch * stacked_screen_transform(win)
 
 # ---------------------------------------------------------------- debug
 
