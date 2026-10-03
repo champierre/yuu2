@@ -84,6 +84,14 @@ func _test() -> void:
 			if p.distance_to(pad.button_pos(c["action"])) < r + r2:
 				apart = false
 	check(inside, "どのボタンも、押せる範囲ごと帯の中に収まる")
+	## 画面の端から指を滑らせると、スマホの「戻る」などの操作になってページがずれる。
+	var off_edge := true
+	for b in TouchPad.BUTTONS:
+		var p: Vector2 = pad.button_pos(b["action"])
+		var r: float = pad.button_r(b["action"]) + TouchPad.REACH
+		if p.x - r < TouchPad.EDGE or p.x + r > 640 - TouchPad.EDGE:
+			off_edge = false
+	check(off_edge, "どのボタンも、画面の左右の端から離れている")
 	check(not hint.visible, "帯が低くてすき間が無いときは、案内を出さない")
 	check(apart, "押せる範囲が、隣のボタンと重ならない")
 	pad.queue_free()
