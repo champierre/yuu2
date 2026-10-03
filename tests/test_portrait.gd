@@ -37,6 +37,13 @@ func _test() -> void:
 	var k := 1170.0 / 640.0
 	check(_near(xf * Vector2(640, 360), Vector2(1170, 360 * k)), "大きい縦長でも角が合う")
 
+	## 縦持ちは絵が小さいので、横持ちを勧める案内を、絵とボタンの間に出す。
+	var hint: Glyph = game._pad_hint
+	check(hint.visible and hint.text == game.PAD_HINT, "縦持ちでは、横持ちを勧める案内が出る")
+	var buttons_top: float = 360 + game.pad_height * 0.5 + TouchPad.stacked_top()
+	check(hint.rect().position.y > 360 and hint.rect().end.y < buttons_top, "案内は、遊びの画面とボタンの間に収まる")
+	check(hint.rect().position.x > 0 and hint.rect().end.x < 640, "案内は、横幅からはみ出さない")
+
 	## ボタンは絵の下にあり、そこを押すと効く。
 	var pad := TouchPad.new()
 	root.add_child(pad)
@@ -60,9 +67,9 @@ func _test() -> void:
 		await touch(xf * pad.button_pos(a), false)
 
 	## いちばん帯が低くなる窓（ほぼ正方形）でも、ボタンは帯の中に収まり、重ならない。
-	root.size = Vector2i(400, 401)
+	root.size = Vector2i(400, 408)
 	await process_frame
-	check(game.stacked and game.pad_height >= 280.0, "ほぼ正方形でも帯は 280 以上ある")
+	check(game.stacked and game.pad_height < TouchPad.stacked_height() + 2.0, "ほぼ正方形の、帯がぎりぎりの窓")
 	var inside := true
 	var apart := true
 	for b in TouchPad.BUTTONS:
@@ -77,6 +84,7 @@ func _test() -> void:
 			if p.distance_to(pad.button_pos(c["action"])) < r + r2:
 				apart = false
 	check(inside, "どのボタンも、押せる範囲ごと帯の中に収まる")
+	check(not hint.visible, "帯が低くてすき間が無いときは、案内を出さない")
 	check(apart, "押せる範囲が、隣のボタンと重ならない")
 	pad.queue_free()
 	await process_frame
@@ -113,7 +121,8 @@ func _test() -> void:
 	check(title._sel == 0, "横持ちのタイトルで 上 が効く")
 
 	## 変換だけの計算も確かめる（正方形は横長扱い）。
-	check(not game.is_portrait(Vector2(720, 720)) and game.is_portrait(Vector2(720, 721)), "縦長かどうかの計算")
+	check(not game.is_portrait(Vector2(720, 720)) and game.is_portrait(Vector2(720, 1280)), "縦長かどうかの計算")
+	check(not game.is_portrait(Vector2(400, 407)) and game.is_portrait(Vector2(400, 408)), "帯にボタンが収まらない窓は、縦持ちの並べ方にしない")
 	check(game.stacked_scale(Vector2(320, 720)) == 0.5, "倍率の計算")
 	check(_near(game.stacked_screen_transform(Vector2(320, 720)) * Vector2(640, 360), Vector2(320, 180)), "変換の計算")
 	TouchPad.pretend = false

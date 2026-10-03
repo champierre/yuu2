@@ -19,13 +19,13 @@ const BUTTONS := [
 	{"text": "止", "action": "pause", "pos": Vector2(612, 72), "r": 16},
 ]
 ## 縦持ちのときの並び。帯の真ん中からの位置と、大きさ。
-## 帯はいちばん低くても 280 あるので、上下 140 の中に収めてある。
-## 640 の幅が 390px ほどに縮むので、横持ちより大きくしている（止 でも直径 44px ほど）。
+## 640 の幅が 390px ほどに縮むので、横持ちより大きくしている（十字は直径 60px ほど、止 でも 44px ほど）。
+## 帯がこの並びより低い窓では、縦持ちの並べ方にしない（stacked_height()）。
 const STACKED := {
-	"up": {"off": Vector2(-196, -72), "r": 40},
-	"down": {"off": Vector2(-196, 72), "r": 40},
-	"left": {"off": Vector2(-268, 0), "r": 40},
-	"right": {"off": Vector2(-124, 0), "r": 40},
+	"up": {"off": Vector2(-174, -86), "r": 50},
+	"down": {"off": Vector2(-174, 86), "r": 50},
+	"left": {"off": Vector2(-260, 0), "r": 50},
+	"right": {"off": Vector2(-88, 0), "r": 50},
 	"act": {"off": Vector2(236, 20), "r": 52},
 	"craft": {"off": Vector2(120, 60), "r": 40},
 	"pause": {"off": Vector2(280, -100), "r": 26},
@@ -45,6 +45,20 @@ var _glyphs := {}
 ## autoload の Game。`Game` と名前で書くと、テスト（--script）がこのファイルを
 ## 先に読んだとき、まだ autoload が登録されておらず、読み込みに失敗する。
 var _game: Node
+
+## 縦持ちの並びで、いちばん上のボタンの押せる範囲の上の端（帯の真ん中から。負の数）。
+static func stacked_top() -> float:
+	var top := 0.0
+	for a in STACKED:
+		top = minf(top, STACKED[a]["off"].y - STACKED[a]["r"] - REACH)
+	return top
+
+## 縦持ちの並びを置くのに要る帯の高さ（押せる範囲ごと収まる高さ）。
+static func stacked_height() -> float:
+	var half := 0.0
+	for a in STACKED:
+		half = maxf(half, absf(STACKED[a]["off"].y) + STACKED[a]["r"] + REACH)
+	return half * 2.0
 
 ## テストで、指で遊ぶ機械のふりをする。
 static var pretend := false

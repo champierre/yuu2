@@ -130,7 +130,13 @@ var stacked := false
 ## 帯の高さ（640x360 と同じ物差し）。並べていないときは 0。
 var pad_height := 0.0
 
+## 帯に出す案内の字と、出すのに要るすき間（遊びの画面とボタンの間）。
+const PAD_HINT := "横に持つと、大きく遊べます"
+const PAD_HINT_COLOR := Color("#6b6259")
+const PAD_HINT_ROOM := 48.0
+
 var _pad_back: CanvasLayer
+var _pad_hint: Glyph
 var _layout_queued := false
 
 func _watch_layout() -> void:
@@ -167,6 +173,11 @@ func _update_layout() -> void:
 		win.oversampling_override = 0.0
 		pad_height = 0.0
 	_pad_back.visible = stacked
+	## 縦持ちは絵が小さいので、横持ちを勧める。遊びの画面とボタンの間に置く。
+	## 帯が低くて、ボタンとの間が空いていないときは出さない。
+	var room := pad_height * 0.5 + TouchPad.stacked_top()
+	_pad_hint.visible = room >= PAD_HINT_ROOM
+	_pad_hint.position = Vector2(320, 360 + room * 0.5)
 	_layout_queued = false
 	layout_changed.emit()
 
@@ -191,10 +202,16 @@ func _build_pad_back() -> void:
 	line.size = Vector2(640, 2)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pad_back.add_child(line)
+	_pad_hint = Glyph.make(PAD_HINT, PAD_HINT_COLOR, 22)
+	_pad_hint.bold = false
+	_pad_hint.shadow = false
+	_pad_back.add_child(_pad_hint)
 
-## 縦長の窓か。縦長なら、横幅いっぱいに絵を出しても、下に帯（280 以上）が残る。
+## 縦持ちの並べ方にできる窓か。
+## 横幅いっぱいに絵を出しても、下にボタンを並べられるだけの帯が残ること。
+## （正方形に近い窓は、帯が足りないので横持ちと同じ扱いにする）
 static func is_portrait(win: Vector2) -> bool:
-	return win.y > win.x
+	return stacked_pad_height(win) >= TouchPad.stacked_height()
 
 ## 縦長の窓 win（画素）の横幅いっぱいに、640x360 の絵を出す倍率。
 static func stacked_scale(win: Vector2) -> float:
