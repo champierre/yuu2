@@ -14,6 +14,14 @@ var _bgm: AudioStreamPlayer
 var _bgm_cache := {}
 var _bgm_want := ""
 var _bgm_building := {}
+## いま鳴っている曲と、その頭が鳴った時刻（マイクロ秒）。
+## 同じ旋律の別の曲へ、同じ所から乗り換えるのに使う（bgm() の keep_pos）。
+var _bgm_now := ""
+var _bgm_head_usec := 0
+var _bgm_fade: Tween
+## 旋律と低音だけを先に組んだもの。太鼓だけが違う曲は、これを使い回す。
+var _tune_cache := {}
+var _tune_building := {}
 var _pluck_cache := {}
 ## 画面を持たない（テストの）ときは音を作らない。時間がかかるだけなので。
 var _silent := false
@@ -47,22 +55,33 @@ func play(sound: String, pitch := 1.0, vol_db := 0.0) -> void:
 	p.play()
 
 ## BGM を切り替える。まだ作っていなければ作ってから鳴らす。
-func bgm(song: String) -> void:
-	if _silent or song == _bgm_want:
+##
+## keep_pos が true なら、頭からではなく、いま鳴っている曲と同じ所から鳴らす。
+## 旋律が同じで太鼓だけが違う曲（final → final2 → final3）へ、途切れずに移るため。
+## 長さが違う曲へは、ふつうに頭から鳴らす。
+func bgm(song: String, keep_pos := false) -> void:
+	if song == _bgm_want:
 		return
+	## 音を作らないテストでも、どの曲を頼まれたかは覚えておく。
 	_bgm_want = song
+	if _silent:
+		return
 	if song == "":
 		_fade_out_bgm()
 		return
 	if _bgm_cache.has(song):
-		_start_bgm(song)
+		_start_bgm(song, keep_pos)
 		return
 	if not _bgm_building.has(song):
 		_bgm_building[song] = true
 		await _render_song(song)
 		_bgm_building.erase(song)
 	if _bgm_want == song:
-		_start_bgm(song)
+		_start_bgm(song, keep_pos)
+
+## いま頼まれている曲（"" は無音）。
+func bgm_wanted() -> String:
+	return _bgm_want
 
 ## 次に使いそうな曲を先に作っておく。
 func prepare(song: String) -> void:
@@ -72,17 +91,36 @@ func prepare(song: String) -> void:
 	await _render_song(song)
 	_bgm_building.erase(song)
 
-func _start_bgm(song: String) -> void:
-	_bgm.stream = _bgm_cache[song]
+func _start_bgm(song: String, keep_pos := false) -> void:
+	var stream: AudioStreamWAV = _bgm_cache[song]
+	var now := Time.get_ticks_usec()
+	var from := 0.0
+	if keep_pos and _bgm_now != "" and _bgm_cache.has(_bgm_now) \
+			and is_equal_approx(_bgm_cache[_bgm_now].get_length(), stream.get_length()):
+		from = fmod((now - _bgm_head_usec) / 1000000.0, stream.get_length())
+	## 消えかけの前の曲が、鳴らし始めた曲を止めてしまわないように。
+	if _bgm_fade != null and _bgm_fade.is_valid():
+		_bgm_fade.kill()
+	_bgm_now = song
+	_bgm_head_usec = now - int(from * 1000000.0)
+	_bgm.stream = stream
+	if from > 0.0:
+		## 同じ曲の続きなので、音を絞らずにそのまま乗り換える。
+		_bgm.volume_db = bgm_volume_db
+		_bgm.play(from)
+		return
 	_bgm.volume_db = -40.0
 	_bgm.play()
-	var tw := create_tween()
-	tw.tween_property(_bgm, "volume_db", bgm_volume_db, 0.6)
+	_bgm_fade = create_tween()
+	_bgm_fade.tween_property(_bgm, "volume_db", bgm_volume_db, 0.6)
 
 func _fade_out_bgm() -> void:
-	var tw := create_tween()
-	tw.tween_property(_bgm, "volume_db", -40.0, 0.5)
-	tw.tween_callback(_bgm.stop)
+	_bgm_now = ""
+	if _bgm_fade != null and _bgm_fade.is_valid():
+		_bgm_fade.kill()
+	_bgm_fade = create_tween()
+	_bgm_fade.tween_property(_bgm, "volume_db", -40.0, 0.5)
+	_bgm_fade.tween_callback(_bgm.stop)
 
 # ---------------------------------------------------------------- 効果音を作る
 
@@ -201,8 +239,17 @@ func _wav(samples: PackedFloat32Array, loop := false) -> AudioStreamWAV:
 const SCALE_IN := [0, 1, 5, 7, 8]   ## 都節（みやこぶし）。もの悲しい
 const SCALE_YO := [0, 2, 5, 7, 9]   ## 民謡の音階。明るい
 
+## 終の章の決戦の曲。其の三の battle（12.8 秒）とは別の、24 秒の曲。
+## はじめの 8 小節はタイトルの旋律を速めて追い立て、あとの 8 小節で高く上りつめる。
+## 魔の段階が進むごとに、同じ旋律のまま太鼓だけを厚くする（final → final2 → final3）。
+const FINAL_MEL := "7 . 8 7 10 . 9 8 7 . 5 7 8 . . . 7 . 8 7 10 . 12 11 10 . 9 8 7 . . . " \
+	+ "5 7 8 7 5 7 8 10 9 . 8 7 8 . 5 . 3 5 7 5 3 5 7 8 7 . . . 5 . . . " \
+	+ "12 . 12 11 10 . 9 8 10 . 10 9 8 . 7 5 7 8 10 8 7 8 10 12 13 . 12 . 10 . . . " \
+	+ "12 . 12 11 10 . 9 8 10 . 12 . 13 . 15 . 14 13 12 10 9 8 7 5 7 . . . . . 5 7"
+const FINAL_BASS := "0 0 . 0 0 . 0 . 0 0 . 0 0 . 2 . -2 -2 . -2 -2 . -2 . -1 -1 . -1 -1 . 2 3"
+
 ## 曲。mel / bass は 1 つが 8 分音符 1 つぶん。数字は音階の何番目か、「.」は休み。
-## drum は k=太鼓（どん）、s=縁（かっ）、h=細かい刻み。
+## drum は k=太鼓（どん）、s=縁（かっ）、h=細かい刻み、o=大太鼓（どおん）。
 const SONGS := {
 	"title": {
 		"bpm": 76, "root": 293.66, "scale": SCALE_IN,
@@ -221,6 +268,21 @@ const SONGS := {
 		"mel": "5 5 7 5 8 7 5 3 5 . 2 3 5 . . . 5 5 7 5 8 7 10 8 7 . 8 7 5 . . . 10 . 9 . 8 . 7 . 8 7 5 3 5 . 7 . 3 . 5 . 7 . 8 . 7 8 7 5 3 . 2 .",
 		"bass": "0 0 . 0 0 . 3 . 0 0 . 0 1 . 2 . ",
 		"drum": "k . s k k . s . k . s k k s s s",
+	},
+	"final": {
+		"bpm": 160, "root": 220.0, "scale": SCALE_IN,
+		"mel": FINAL_MEL, "bass": FINAL_BASS,
+		"drum": "k . . . s . . . k . k . s . . .",
+	},
+	"final2": {
+		"bpm": 160, "root": 220.0, "scale": SCALE_IN,
+		"mel": FINAL_MEL, "bass": FINAL_BASS,
+		"drum": "o . h . s . h k k . h k s . h s",
+	},
+	"final3": {
+		"bpm": 160, "root": 220.0, "scale": SCALE_IN,
+		"mel": FINAL_MEL, "bass": FINAL_BASS,
+		"drum": "o h k h s h k k o h k h s k s s",
 	},
 	"cave": {
 		"bpm": 70, "root": 220.0, "scale": SCALE_IN,
@@ -283,6 +345,7 @@ func _drum(kind: String) -> PackedFloat32Array:
 	var s: PackedFloat32Array
 	match kind:
 		"k": s = _mix(_tone(0.35, 110, 45, "sin", 0.9, 2.5), _noise(0.05, 0.2))
+		"o": s = _mix(_tone(0.55, 85, 34, "sin", 1.0, 2.0), _noise(0.08, 0.3))
 		"s": s = _mix(_noise(0.06, 0.35, 3.0), _tone(0.05, 900, 700, "sq", 0.08))
 		_: s = _noise(0.03, 0.12, 3.0)
 	_pluck_cache[key] = s
@@ -291,10 +354,44 @@ func _drum(kind: String) -> PackedFloat32Array:
 ## 曲を 1 周ぶん作る。重いので、少しずつ進めて何コマかに分ける。
 func _render_song(name: String) -> void:
 	var song: Dictionary = SONGS[name]
+	var tune := await _render_tune(song)
+	var buf := tune.duplicate()
+	var total := buf.size()
+	var steps := _tokens(song["mel"]).size()
+	var step_n := total / steps
+	var drum := _tokens(song["drum"])
+	var work := 0
+	for i in steps:
+		if drum.is_empty():
+			break
+		var d: String = drum[i % drum.size()]
+		if d == ".":
+			continue
+		var ev := _drum(d)
+		var start := i * step_n
+		for j in ev.size():
+			buf[(start + j) % total] += ev[j] * 0.35
+		work += ev.size()
+		if work > 30000:
+			work = 0
+			await get_tree().process_frame
+	_bgm_cache[name] = _wav(buf, true)
+
+## 旋律と低音だけを組んだもの。同じ旋律の曲（太鼓だけが違う）は、作ったものを使い回す。
+func _tune_key(song: Dictionary) -> String:
+	return "%s|%s|%s|%s|%s" % [song["bpm"], song["root"], song["scale"], song["mel"], song["bass"]]
+
+func _render_tune(song: Dictionary) -> PackedFloat32Array:
+	var key := _tune_key(song)
+	## ほかで作っている最中なら、できあがるのを待つ。
+	while _tune_building.has(key):
+		await get_tree().process_frame
+	if _tune_cache.has(key):
+		return _tune_cache[key]
+	_tune_building[key] = true
 	var step_sec := 60.0 / float(song["bpm"]) / 2.0
 	var mel := _tokens(song["mel"])
 	var bass := _tokens(song["bass"])
-	var drum := _tokens(song["drum"])
 	var steps := mel.size()
 	var step_n := int(step_sec * RATE)
 	var total := steps * step_n
@@ -319,10 +416,6 @@ func _render_song(name: String) -> void:
 			var b: String = bass[i % bass.size()]
 			if b != ".":
 				events.append(_scale(_pluck(_degree_hz(song, int(b)) * 0.5, 1.8, 0.45), 0.8))
-		if drum.size() > 0:
-			var d: String = drum[i % drum.size()]
-			if d != ".":
-				events.append(_drum(d))
 		for ev in events:
 			var start := i * step_n
 			for j in ev.size():
@@ -332,7 +425,9 @@ func _render_song(name: String) -> void:
 			if work > 30000:
 				work = 0
 				await get_tree().process_frame
-	_bgm_cache[name] = _wav(buf, true)
+	_tune_cache[key] = buf
+	_tune_building.erase(key)
+	return buf
 
 func _scale(a: PackedFloat32Array, k: float) -> PackedFloat32Array:
 	var out := a.duplicate()

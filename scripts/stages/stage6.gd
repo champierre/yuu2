@@ -68,6 +68,15 @@ func subtitle() -> String:
 func bgm_name() -> String:
 	return "cave"
 
+## 魔を倒したあとの曲（ending）を、光に触れても止めず、エンディングまで流し続ける。
+## 止めると、エンディングの場面でまた頭から鳴り直して、余韻がとぎれる（#62）。
+func clear_keeps_bgm() -> bool:
+	return true
+
+## 決戦の曲。魔の段階が進むごとに、同じ旋律のまま太鼓が厚くなる。
+static func battle_song(phase: int) -> String:
+	return "final" if phase <= 1 else "final%d" % mini(phase, 3)
+
 func _build() -> void:
 	enable_dark(0.1)
 	dark.tint = Color(0.06, 0.02, 0.08)
@@ -86,7 +95,7 @@ func _build() -> void:
 	_hero_light = Node2D.new()
 	hero.add_child(_hero_light)
 	add_light(_hero_light, HERO_R, 1.0)
-	Sfx.prepare("battle")
+	Sfx.prepare(battle_song(1))
 
 func _altar(c: Vector2i, k: String, col: Color) -> void:
 	var g := tile(c, "祭", Color("#7a6a5a"), WALL)
@@ -141,7 +150,8 @@ func _start_battle() -> void:
 	])
 	if left():
 		return
-	Sfx.bgm("battle")
+	Sfx.bgm(battle_song(1))
+	Sfx.prepare(battle_song(2))
 	hud.boss_bar(1.0)
 	mode = "play"
 
@@ -312,6 +322,10 @@ func _hurt_boss() -> void:
 		_t_summon = 1.0
 		Sfx.play("roar")
 		shake(10.0)
+		## 旋律は途切れさせず、同じ所から太鼓だけを厚くする。
+		Sfx.bgm(battle_song(_phase), true)
+		## 次に鳴らす曲を先に作っておく。最後の段階なら、倒したあとの曲。
+		Sfx.prepare(battle_song(_phase + 1) if _phase < 3 else "ending")
 		if _phase == 2:
 			hud.toast("魔が鬼を呼んだ！", Hud.RED)
 		else:
