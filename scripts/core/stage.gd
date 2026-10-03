@@ -84,6 +84,11 @@ func subtitle() -> String:
 func bgm_name() -> String:
 	return "field"
 
+## クリアしても曲を止めないか。ふつうは止めて、クリアの音を聞かせる。
+## 終の章は、魔を倒したあとの曲をエンディングまで流し続ける。
+func clear_keeps_bgm() -> bool:
+	return false
+
 ## 地図を並べ、ものを置く。
 func _build() -> void:
 	pass
@@ -987,7 +992,8 @@ func clear() -> void:
 	mode = "clear"
 	hero.vel = Vector2.ZERO
 	_end_charge()
-	Sfx.bgm("")
+	if not clear_keeps_bgm():
+		Sfx.bgm("")
 	Sfx.play("clear")
 	hitstop(0.12)
 	Fx.ring(world, _goal.position, Color("#d9a400"), 260.0, 0.6, 5.0)
