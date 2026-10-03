@@ -21,10 +21,16 @@ func _test() -> void:
 	hero.max_hp = 99
 	hero.hp = 99
 
+	## 宝箱は左下の稽古場にある。弓を取り、向こう端の「射」の印から的を射抜くと蟲が出てくる。
+	check(await walk_route(Vector2i(3, 12)), "宝箱の前まで歩ける")
 	await face("left")
 	await tap("act")
 	check(hero.holding("弓"), "宝箱から弓が出た")
-	check(stage._awake, "弓を取ると蟲が現れる")
+	check(await walk_route(Vector2i(23, 7)), "「射」の印まで歩ける")
+	await face("left")
+	await hold("act", 0.9)
+	await until(func(): return stage._awake, 4.0)
+	check(stage._awake, "「射」の印から的を射抜くと蟲が現れる")
 	await until(func(): return stage.mode == "talk", 4.0)
 	await finish_talk()
 	await until(func(): return stage.mode == "play", 3.0)

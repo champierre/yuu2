@@ -22,9 +22,12 @@ var hits_walls := true
 var orient := true
 
 var _traveled := 0.0
+## 射た所（飛び始めた位置）。どれだけ離れた所から当てたかを見るのに使う。
+var start_pos := Vector2.ZERO
 var _dead := false
 
 func _ready() -> void:
+	start_pos = position
 	shadow = false
 	z_index = 20
 	if orient:

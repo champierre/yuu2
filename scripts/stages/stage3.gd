@@ -6,6 +6,9 @@ extends Stage
 ## 新しい末尾が尾になる。最後に残った頭が弱点になる。
 ## 頭を狙わず、尻尾を狙うのが答え。
 ##
+## 【稽古】左下の稽古場で弓を取り、向こう端の「射」の印から的を射抜くと、蟲が目を覚ます。
+## それまでは戦いが始まらないので、引き絞ると遠くへ届くことを先に試せる（#28）。
+##
 ## 【隠し】けがをした旅人「人」と、苗木「木」。人＋木＝休 で命が戻る。
 
 const MAP := [
@@ -16,13 +19,13 @@ const MAP := [
 	"山・・・・岩・・・・・・・・・・・・・・岩・・・・山",
 	"山・・・・・・・・・・・・・・・・・・・・・・・・山",
 	"山・・・・・・・・・・・・・・・・・・・・・・・・山",
-	"山・・・・・・・・・・・・・・・・・・・・・・・・山",
+	"山・的・・・・・・・・・・・・・・・・・・・・射・山",
 	"山・・・・・・・・岩・・・・・・・岩・・・・・・・山",
 	"山・・・・・・・・・・・・・・・・・・・・・・・・山",
-	"山・・・・・・・・・・・・・・・・・・・・・・・・山",
+	"山・・・・・・・・・岩・・・・・・・・・・・・・・山",
 	"山・草・・・・・・・・・・・・・・・・・・・・苗・山",
-	"山・人・・・・・・・・箱勇・・・・・・・・・・・・山",
-	"山草・・・・・・・・・・・・・・・・・・・・・・草山",
+	"山・箱・・・・人・・・・・勇・・・・・・・・・・・山",
+	"山草・・札・・・・・・・・・・・・・・・・・・・草山",
 	"山山山山山山山山山山山山山山山山山山山山山山山山山山",
 ]
 
@@ -59,6 +62,13 @@ var _spit := 0.0
 var _wiggle := 0.0
 var _trail_acc := 0.0
 var _awake := false
+var _dummy: Glyph = null
+var _told_practice := false
+## 的と画面の反対側にある「射」の印。ここから射て的に当てると、蟲が目を覚ます。
+var _mark_cell := Vector2i(-1, -1)
+## 印のマスの真ん中から、これだけまでのずれは「印の上から射た」とみなす。
+const MARK_REACH := 16.0
+var _clinks := 0
 var _dead := false
 
 func number() -> int:
@@ -76,6 +86,14 @@ func _build() -> void:
 		"箱": func(c): add_chest(c, "弓"),
 		"人": func(c): add_npc(cell_center(c), "人", COL_TRAVELER, _talk_traveler),
 		"苗": func(c): drop_item("木", cell_center(c)),
+		"的": func(c): _make_target(c),
+		"射": func(c): _make_mark(c),
+		"札": func(c): add_sign(c, [
+			["札", "弓の稽古場。上の的を射てみよ。"],
+			["札", "長く引き絞るほど、矢は遠くまで届く。硬いものには弾かれる。"],
+			["札", "向こう端の「射」の印から、的を射抜けたら一人前だ。"],
+			["札", "この先は蟲のすみか。用意ができてから進め。"],
+		]),
 	})
 	Sfx.prepare("battle")
 
@@ -101,13 +119,26 @@ func _talk_traveler(g: Glyph) -> void:
 	g.queue_free()
 	give("人", g.global_position)
 
-func on_pick(k: String) -> void:
-	if k == "弓" and not _awake:
-		_emerge()
+## 「射」の印。床に描くだけで、上を歩ける。
+func _make_mark(c: Vector2i) -> void:
+	var g := decor(c, "射", Hud.RED)
+	g.size = 20
+	g.position = cell_center(c)
+	_mark_cell = c
+
+## 弓の稽古の的。蟲と戦う前に、引き絞ると遠くへ届くことを試せる（#28）。
+## 何度でも射られる。当たると数を数え、ぽんと弾む。
+func _make_target(c: Vector2i) -> void:
+	var g := tile(c, "的", Color("#b8322a"), FREE)
+	g.add_to_group("shootable")
+	g.set_meta("hits", 0)
+	_dummy = g
 
 func _stage_process(delta: float) -> void:
-	if not _awake and hero.position.y < 220.0:
-		_emerge()
+	## 的を射抜く前に穴の方へ行っても、蟲は出てこない。一度だけ稽古場へ促す。
+	if not _awake and not _told_practice and hero.position.y < 100.0:
+		_told_practice = true
+		hud.toast("穴は静まりかえっている……　まずは稽古場の的を射抜こう", INK, 2.6)
 	if _head == null or _dead:
 		return
 	_crawl(delta)
@@ -236,7 +267,43 @@ func _spit_poison() -> void:
 
 # ---------------------------------------------------------------- 矢
 
+func _wake_after_practice() -> void:
+	if _awake:
+		return
+	_awake = true
+	hud.toast("見事！　……地の底で、何かが目を覚ました", Hud.RED, 2.4)
+	if not await wait(1.0):
+		return
+	_awake = false
+	_emerge()
+
+## 岩に当たった矢は「カン」と弾く。蟲の頭と節も同じく硬い、という前ぶれ。
+func on_shot_wall(shot: Shot) -> void:
+	var t: Glyph = tiles.get(cell_of(shot.global_position))
+	if t != null and t.text == "岩":
+		_clinks += 1
+		Sfx.play("clink")
+		Fx.burst(world, shot.position, Color("#ffffff"), 4, "＊", 80.0, 9)
+		Fx.float_text(world, shot.position + Vector2(0, -10), "カン", Color("#707070"), 11, 14.0, 0.5)
+
 func on_shot_hit(shot: Shot, target: Glyph) -> bool:
+	if target == _dummy:
+		_dummy.set_meta("hits", int(_dummy.get_meta("hits")) + 1)
+		Sfx.play("hit", 1.3)
+		Fx.pop(_dummy, 0.5)
+		Fx.burst(world, _dummy.position, Color("#b8322a"), 6, "・", 90.0, 9)
+		## 射た所（勇者の立ち位置）。矢は勇者の少し前から飛び出す。
+		var from := shot.start_pos - shot.dir * 14.0
+		if _awake or from.distance_to(cell_center(_mark_cell)) > MARK_REACH:
+			Fx.float_text(world, _dummy.position + Vector2(0, -16), "命中！", Hud.RED, 12)
+			if not _awake:
+				hud.toast("命中！……向こう端の「射」の印から射抜いてみよ", Hud.RED)
+			return true
+		## 「射」の印から射抜いた。それを合図に、蟲が目を覚ます（#28）。
+		Fx.float_text(world, _dummy.position + Vector2(0, -16), "見事！", Hud.RED, 14)
+		Fx.ring(world, _dummy.position, Hud.RED, 160.0, 0.5, 3.0)
+		_wake_after_practice()
+		return true
 	if _dead or _head == null:
 		return false
 	var tail: Glyph = _segs[-1] if not _segs.is_empty() else _head
